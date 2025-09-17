@@ -1,0 +1,218 @@
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+
+.contenedor-principal {
+  width: 100vw;
+  height: 100vh;
+  background: linear-gradient(135deg, #6f9b97 0%, #23352d 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  position: relative;
+}
+
+.contenedor-principal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('/fondo.png') center center/cover no-repeat;
+  opacity: 0.1;
+}
+
+.contenedor-principal form {
+  position: relative;
+  z-index: 2;
+  width: 400px;
+  min-height: 450px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 25px;
+  transition: transform 0.3s ease;
+}
+
+.contenedor-principal h2 {
+  text-align: center;
+  color: #ffffff;
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+   background: linear-gradient(135deg, #7bacf1 0%, #1c3799  100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.contenedor-principal h3{
+    text-align: center;
+  color: #ffffff;
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin-bottom: 10px;
+   background: linear-gradient(135deg, #1cd2e6 0%, #0512ff  100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.option{
+    flex: 1;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.option.active{
+    background: linear-gradient(90deg, rgba(102,234,223,0.12), rgba(95, 52, 12, 0.06));
+}
+
+.field{ display:flex; flex-direction: column; gap:6px; }
+
+.contenedor-principal button{
+  width: 100%;
+  height: 50px;
+  background: linear-gradient(135deg, #1cd2e6 0%, #0512ff  100%);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 10px;
+}
+
+
+
+
+.contenedor-principal .field-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 8px;
+}
+
+
+.contenedor-principal label {
+  color: #4a5568;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+}
+
+
+.contenedor-principal input {
+  width: 100%;
+  height: 50px;
+  padding: 0 16px;
+  border: 2px solid #e2e8f0;
+  background-color: #f7fafc;
+  border-radius: 12px;
+  font-size: 1rem;
+  color: #2d3748;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.contenedor-principal input:focus {
+  border-color: #667eea;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  transform: translateY(-2px);
+}
+
+.contenedor-principal input::placeholder {
+  color: #a0aec0;
+  font-style: italic;
+}
+
+.contenedor-principal button {
+  width: 100%;
+  height: 50px;
+  background: linear-gradient(135deg, #1cd2e6 0%, #0512ff  100%);
+  border: none;
+  border-radius: 12px;
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 10px;
+}
+
+.contenedor-principal button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+  background: linear-gradient(135deg, #1cd2e6 0%, #0512ff  100%);
+}
+
+.contenedor-principal button:active {
+  transform: translateY(0px);
+}
+
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 10px 0;
+  font-size: 0.85rem;
+}
+
+
+.forgot-password {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s ease;
+}
+
+.forgot-password:hover {
+  color: #5a67d8;
+  text-decoration: underline;
+}
+
+.contenedor-principal #titulo{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-direction: row;
+}
+
+
+
+
+
+@media (max-width: 480px) {
+  .contenedor-principal form {
+    width: 90%;
+    margin: 20px;
+    padding: 30px 25px;
+  }
+  
+  .contenedor-principal h2 {
+    font-size: 1.8rem;
+  }
+}

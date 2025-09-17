@@ -1,0 +1,105 @@
+.home-contenedor {
+    display: flex;
+    min-height: calc(100vh - 60px);
+    /* background: linear-gradient(120deg, #375887 0%, #0037fc  100%); */
+}
+
+.home-contenedor #apartados {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    padding: 10px;
+    gap: 10px;
+}
+
+.home-contenedor #lista-proyectos {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    background-color: white;
+    width: 100%;
+    min-height: 100vh;
+    max-height: auto;
+    border-radius: 8px;
+    padding: 20px;
+     box-shadow: 0px 2px 4px rgba(2, 93, 229, 0.5);
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.proyectos {
+    display: flex;
+    flex-direction: column;
+    width: 300px;
+    height: 250px;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 10px;
+    box-shadow: 0px 2px 4px rgba(2, 93, 229, 0.5);
+}
+
+
+#nuevo {
+    position: fixed;
+    bottom: 25px;
+    right: 25px;
+    background: linear-gradient(135deg, #1cd2e6 0%, #0512ff 100%);
+    color: white;
+    border: none;
+    border-radius: 80%;
+    width: 45px;
+    height: 50px;
+    font-size: 2.2rem;
+    display: flex;
+    align-content: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+#nuevo:hover {
+    background: linear-gradient(135deg, #e0ec07 0%, #00bb38 100%);
+    transform: scale(1.1);
+}
+#titulo-proyectos {
+    width: 100%;
+    border-radius: 5px;
+    box-shadow: 0px 2px 4px rgba(2, 93, 229, 0.5);
+    background: linear-gradient(135deg, #1cd2e6 0%, #0512ff 100%);
+    
+}
+
+.titulo {
+    font-size: 2rem;
+    font-weight: bold;
+    color: white;
+    /* background: linear-gradient(135deg, #1cd2e6 0%, #0512ff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent; */
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+
+@media (max-width: 768px) {
+    .home-contenedor {
+        flex-direction: column;
+    }
+
+    .home-contenedor #apartados {
+        padding: 5px;
+    }
+
+    .home-contenedor #lista-proyectos {
+        padding: 10px;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    .proyectos {
+        width: 100%;
+        height: auto;
+    }
+}
