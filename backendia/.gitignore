@@ -1,0 +1,29 @@
+# Dependencias
+node_modules/
+
+# Output de TypeScript
+dist/
+build/
+
+# Archivos de logs
+logs
+*.log
+npm-debug.log*
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Configuración del entorno
+.env
+
+# Output de TypeScript local
+*.tsbuildinfo
+
+# Coverage (tests)
+coverage/
+
+# Editor/IDE
+.vscode/
+.idea/
+*.swp
