@@ -8,7 +8,7 @@ const app = express();
 app.use(express.json());
 
 // Allow configuring CORS via env in production
-const defaultOrigins = ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'];
+const defaultOrigins = ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000','https://calm-smoke-04a369c10.2.azurestaticapps.net'];
 const envOrigins = process.env.CORS_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({
     origin: envOrigins && envOrigins.length > 0 ? envOrigins : defaultOrigins,
