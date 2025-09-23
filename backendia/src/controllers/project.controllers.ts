@@ -3,6 +3,29 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// Tipos mínimos para evitar 'implicit any' en callbacks de mapeo
+interface ProyectoLite {
+    id_proyecto: number;
+    titulo: string;
+    fecha_inicio: Date;
+    diagrama_json: unknown | null;
+    estado: string;
+}
+
+interface PermisosLite { descripcion: string }
+interface UsuarioLite { id_usuario: number; nombre: string | null; correo: string }
+
+type DetalleProyectoWithRels = {
+    Proyecto: ProyectoLite;
+    Permisos: PermisosLite;
+    Usuario: UsuarioLite;
+};
+
+type ColaboradorDetalle = {
+    Usuario: UsuarioLite;
+    Permisos: PermisosLite;
+};
+
 // Crear un nuevo proyecto
 export const createProject = async (req: Request, res: Response) => {
     try {
@@ -108,7 +131,7 @@ export const getUserProjects = async (req: Request, res: Response) => {
             }
         });
 
-        const proyectosFormateados = proyectos.map(detalle => ({
+        const proyectosFormateados = proyectos.map((detalle: DetalleProyectoWithRels) => ({
             id: detalle.Proyecto.id_proyecto,
             name: detalle.Proyecto.titulo,
             description: null, // Puedes agregar este campo en el futuro
@@ -186,7 +209,7 @@ export const getProject = async (req: Request, res: Response) => {
                 creator_id: acceso.id_usuario,
                 estado: acceso.Proyecto.estado,
                 rol: acceso.Permisos.descripcion,
-                colaboradores: colaboradores.map(col => ({
+                colaboradores: colaboradores.map((col: ColaboradorDetalle) => ({
                     usuario: {
                         id: col.Usuario.id_usuario,
                         name: col.Usuario.nombre,

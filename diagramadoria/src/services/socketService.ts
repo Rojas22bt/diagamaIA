@@ -33,8 +33,19 @@ class SocketService {
   connect(token?: string, url?: string) {
     if (this.socket?.connected) return;
     
-    const endpoint = url || import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
-    console.log('Conectando a:', endpoint);
+  // Prefer explicit URL param, then env vars, and finally production backend as fallback
+  const envUrl = (import.meta.env as any).VITE_BACKEND_URL || (import.meta.env as any).VITE_API_BASE_URL;
+  // Ensure we connect to the ORIGIN (strip trailing /api if provided)
+  const normalizedEnv = typeof envUrl === 'string' ? envUrl.replace(/\/?api\/?$/i, '') : undefined;
+
+  // Nota para desarrollo local:
+  // - Puedes crear un archivo .env en diagramadoria con: VITE_BACKEND_URL=http://localhost:3000
+  // - O puedes forzar la URL local al llamar: socketService.connect(token, 'http://localhost:3000')
+  // - Si prefieres, descomenta la siguiente línea para usar localhost como fallback en dev:
+  // const endpoint = url || normalizedEnv || 'http://localhost:3000';
+
+  const endpoint = url || normalizedEnv || 'https://diagamaia.onrender.com';
+    console.log('Conectando a Socket.IO en:', endpoint);
     
     this.socket = io(endpoint, { 
       auth: { token },

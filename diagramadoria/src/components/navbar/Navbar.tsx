@@ -36,9 +36,6 @@ const Navbar = () => {
                 <ul className="navbar-menu">
                     <li><button onClick={handleProjectsClick}>Proyectos</button></li>
                     <li><button onClick={handleInvitationsClick}>Invitaciones</button></li>
-                    <li>View</li>
-                    <li>Help</li>
-                    <li>Settings</li>
                     <li><button onClick={handleLogout}>Logout</button></li>
                 </ul>
             </div>
