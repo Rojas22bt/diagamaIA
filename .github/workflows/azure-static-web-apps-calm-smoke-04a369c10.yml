@@ -32,6 +32,9 @@ jobs:
         working-directory: diagramadoria
         env:
           VITE_API_BASE_URL: https://diagamaia.onrender.com
+          # WARNING: Exposing OpenAI key to the client is unsafe. Prefer proxying via backend.
+          # If you still want client-side AI in SWA, set this secret in repo settings.
+          VITE_OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: npm run build
       - name: Build And Deploy
         id: builddeploy
