@@ -1,11 +1,27 @@
 import { useNavigate } from 'react-router-dom';
+import { useAppDispatch } from '../../store/store';
+import { logout } from '../../store/authSlice';
 import './NavbarCss.css';
 
 const Navbar = () => {
     const navigate = useNavigate();
+    const dispatch = useAppDispatch();
 
     const handleLogoClick = () => {
-        navigate('/');
+        navigate('/dashboard');
+    };
+
+    const handleProjectsClick = () => {
+        navigate('/dashboard');
+    };
+
+    const handleInvitationsClick = () => {
+        navigate('/invitations');
+    };
+
+    const handleLogout = () => {
+        dispatch(logout());
+        navigate('/login');
     };
 
     return (
@@ -18,11 +34,12 @@ const Navbar = () => {
                 </button>
                 <div>DiagramaIA</div>
                 <ul className="navbar-menu">
-                    <li>File</li>
-                    <li>Editation</li>
+                    <li><button onClick={handleProjectsClick}>Proyectos</button></li>
+                    <li><button onClick={handleInvitationsClick}>Invitaciones</button></li>
                     <li>View</li>
                     <li>Help</li>
                     <li>Settings</li>
+                    <li><button onClick={handleLogout}>Logout</button></li>
                 </ul>
             </div>
         </nav>

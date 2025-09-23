@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
-import { Typography, IconButton, Paper } from "@mui/material";
+import { Typography, Paper, Tabs, Tab, IconButton } from "@mui/material";
 import MicIcon from "@mui/icons-material/Mic";
 import StopCircleIcon from "@mui/icons-material/StopCircle";
+import { suggestActionFromText, type ActionSuggestion } from "../ai/openaiClient";
 
 interface AudioRecorderProps {
   onTranscript: (text: string) => void;
@@ -28,47 +29,105 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
   };
 
   return (
-    <Paper elevation={3} style={{ margin: "20px 0", padding: 24 }}>
-      <Typography variant="h6">Entrada por voz</Typography>
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+    <Paper className="ai-card" elevation={3}>
+      <div className="ai-head">
+        <Typography variant="subtitle1">Entrada por voz</Typography>
         <IconButton
           color={isRecording ? "error" : "primary"}
-          size="large"
+          size="small"
           aria-label={isRecording ? "Detener grabación" : "Iniciar grabación"}
           onClick={isRecording ? stopRecording : startRecording}
         >
-          {isRecording ? <StopCircleIcon fontSize="large" /> : <MicIcon fontSize="large" />}
+          {isRecording ? <StopCircleIcon /> : <MicIcon />}
         </IconButton>
-        <Typography variant="body2" color={isRecording ? "error" : "textSecondary"}>
-          {isRecording ? "Grabando... (haz clic para detener)" : "Haz clic para empezar a grabar"}
-        </Typography>
       </div>
-      <div style={{ marginTop: "10px", minHeight: "40px", padding: "10px", background: "#eee", borderRadius: "8px" }}>
-        <Typography variant="subtitle1" gutterBottom>
-          {transcript || (isRecording ? "Hablando..." : "Transcripción de audio aquí")}
+      <div className={`ai-voice ${isRecording ? 'recording' : ''}`}>
+        <Typography variant="body2" color={isRecording ? "error" : "textSecondary"}>
+          {isRecording ? "Grabando... (haz clic para detener)" : "Haz clic en el micrófono para empezar"}
         </Typography>
+        <div className="ai-scrollbox" title={transcript}>
+          {transcript || (isRecording ? "Hablando..." : "Transcripción de audio aquí")}
+        </div>
       </div>
     </Paper>
   );
 }
 
 const AudioIAPage: React.FC = () => {
-  const [lastTranscript, setLastTranscript] = useState("");
+  const [aiResult, setAiResult] = useState<ActionSuggestion | null>(null);
+  const [isCallingAI, setIsCallingAI] = useState(false);
+  const [manualPrompt, setManualPrompt] = useState("");
+  const [tab, setTab] = useState<'voz' | 'texto'>("voz");
+  const aiResultPretty = useMemo(() => JSON.stringify(aiResult, null, 2), [aiResult]);
+
+  const applySuggestion = (s: ActionSuggestion | null) => {
+    if (!s) return;
+    const evt = new CustomEvent<ActionSuggestion>('diagram-ai-action', { detail: s });
+    window.dispatchEvent(evt);
+  };
 
   return (
-    <div style={{ maxWidth: 600, margin: "40px auto" }}>
-      <Typography variant="h4" gutterBottom>
-        Audio IA - Transcripción por voz
-      </Typography>
-      <AudioRecorder onTranscript={setLastTranscript} />
-      {lastTranscript && (
-        <Paper elevation={2} style={{ marginTop: 24, padding: 16 }}>
-          <Typography variant="subtitle1" color="primary">
-            Última transcripción:
-          </Typography>
-          <Typography variant="body1">{lastTranscript}</Typography>
-        </Paper>
+    <div className="ai-panel" style={{ padding: '20px', backgroundColor: '#1e1e2f', borderRadius: '10px', color: '#fff' }}>
+      <div className="ai-panel__top" style={{ marginBottom: '20px', textAlign: 'center' }}>
+        <Typography variant="h4" style={{ fontWeight: 'bold', color: '#00d1b2' }}>Asistente IA</Typography>
+        <Tabs
+          value={tab}
+          onChange={(_, v) => setTab(v)}
+          TabIndicatorProps={{ style: { backgroundColor: '#00d1b2' } }}
+          style={{ marginTop: '10px' }}
+        >
+          <Tab label="Voz" value="voz" style={{ color: '#fff', fontWeight: 'bold' }} />
+          <Tab label="Texto" value="texto" style={{ color: '#fff', fontWeight: 'bold' }} />
+        </Tabs>
+      </div>
+      {tab === 'voz' && (
+        <div style={{ textAlign: 'center' }}>
+          <AudioRecorder
+            onTranscript={async (t) => {
+              setIsCallingAI(true);
+              const suggestion = await suggestActionFromText(t);
+              setAiResult(suggestion);
+              setIsCallingAI(false);
+            }}
+          />
+          {isCallingAI && <Typography style={{ color: '#00d1b2', marginTop: '10px' }}>Procesando...</Typography>}
+        </div>
       )}
+      {tab === 'texto' && (
+        <div style={{ textAlign: 'center' }}>
+          <textarea
+            value={manualPrompt}
+            onChange={(e) => setManualPrompt(e.target.value)}
+            placeholder="Escribe tu consulta aquí..."
+            style={{ width: '100%', height: '100px', borderRadius: '5px', padding: '10px', marginBottom: '10px' }}
+          />
+          <button
+            onClick={async () => {
+              setIsCallingAI(true);
+              const suggestion = await suggestActionFromText(manualPrompt);
+              setAiResult(suggestion);
+              setIsCallingAI(false);
+            }}
+            style={{ backgroundColor: '#00d1b2', color: '#fff', padding: '10px 20px', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+          >
+            Generar sugerencia
+          </button>
+          {isCallingAI && <Typography style={{ color: '#00d1b2', marginTop: '10px' }}>Procesando...</Typography>}
+        </div>
+      )}
+      <div style={{ marginTop: '20px', backgroundColor: '#2e2e3f', padding: '10px', borderRadius: '5px' }}>
+        <Typography variant="h6" style={{ color: '#00d1b2' }}>Resultados:</Typography>
+        <pre style={{ color: '#fff', overflowX: 'auto' }}>{aiResultPretty}</pre>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <button
+            onClick={() => applySuggestion(aiResult)}
+            disabled={!aiResult || aiResult.type === 'noop'}
+            style={{ backgroundColor: '#1abc9c', color: '#fff', padding: '8px 12px', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+          >
+            Aplicar al diagrama
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

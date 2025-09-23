@@ -1,7 +1,754 @@
+/* Asegúrate de que estos estilos estén en tu DiagramCss.css */
+
+/* CRÍTICOS PARA QUE FUNCIONE EL DIAGRAMA */
 .diagrama-contenedor {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    min-height: calc(100vh - 60px);
+  width: 100vw !important;
+  height: 100vh !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: row !important;
+}
+
+.canvas {
+  position: relative !important;
+  flex: 1 !important;
+  min-width: 300px !important;
+  min-height: 400px !important;
+  background: #f8f9fa !important;
+  overflow: hidden !important;
+}
+
+.paper-host {
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 400px !important;
+  position: relative !important;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 280px;
+  background: #282e61;
+  border-right: 1px solid #000000;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 2px 0 6px rgba(0,0,0,0.5);
+  gap: 12px;
+  overflow-y: auto;
+  max-height: 100vh;
+}
+
+.sidebar h3 {
+  margin: 0 0 20px 0;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.sidebar button {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  background: #ffffff;
+  color: #000000;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.sidebar label{
+    font-weight: bold;
+    color: #ffffff;
+    margin-bottom: 4px;
+}
+
+.sidebar button:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.sidebar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sidebar div {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #495057;
+}
+
+.sidebar input, .sidebar select {
+  padding: 4px 8px;
+  border: 1px solid #ced4da;
+  color: #000000;
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+/* Sidebar redesign helpers */
+.sidebar-actions-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sidebar-section {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-title {
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control, .input-sm, .sidebar select, .sidebar input {
+  background: #ffffff;
+}
+
+.input-sm {
+  padding: 6px 8px;
+  width: 100%;
+  max-width: 120px;
+}
+
+.input-error {
+  background: #f8d7da !important;
+  color: #721c24 !important;
+  border-color: #f5c2c7 !important;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #ced4da;
+  background: #ffffff;
+  color: #000000;
+  font-weight: 600;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn-primary {
+  background: #0d6efd;
+  color: #ffffff;
+  border-color: #0d6efd;
+}
+
+.btn-secondary {
+  background: #6c757d;
+  color: #ffffff;
+  border-color: #6c757d;
+}
+
+.btn-accent {
+  background: #0d6efd;
+  color: #ffffff;
+  border-color: #0d6efd;
+}
+
+.btn-import {
+  background: #198754;
+  color: #ffffff;
+  border-color: #198754;
+  cursor: pointer;
+}
+
+.btn:hover {
+  filter: brightness(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.file-input-hidden {
+  display: none;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.modal {
+  background: white;
+  padding: 24px;
+  border-radius: 8px;
+  max-width: 600px;
+  width: 90vw;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal h3 {
+  margin: 0 0 20px 0;
+  color: #343a40;
+}
+
+.modal form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal label {
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 4px;
+}
+
+.modal input, .modal select {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.modal button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s;
+}
+
+.modal button[type="submit"] {
+  background: #007bff;
+  color: white;
+}
+
+.modal button[type="submit"]:hover {
+  background: #0056b3;
+}
+
+.modal button[type="button"] {
+  background: #6c757d;
+  color: white;
+}
+
+.modal button[type="button"]:hover {
+  background: #545b62;
+}
+
+/* Zoom Controls */
+.zoom-controls {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 8px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+}
+
+.zoom-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #ced4da;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.zoom-btn:hover {
+  background: #e9ecef;
+  border-color: #adb5bd;
+}
+
+.zoom-level {
+  font-size: 14px;
+  font-weight: 600;
+  color: #495057;
+  min-width: 40px;
+  text-align: center;
+}
+
+/* Audio IA Panel */
+.audio-toggle-container {
+  position: absolute;
+  top: 110px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.audio-toggle-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: #28a745;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s;
+}
+
+.audio-toggle-btn:hover {
+  background: #218838;
+  transform: scale(1.05);
+}
+
+.audioia-section {
+  position: absolute;
+  top: 170px;
+  right: 20px;
+  /* ancho flexible entre 280 y 480 según viewport */
+  width: clamp(280px, 28vw, 480px);
+  /* altura se adapta al contenido hasta llenar la ventana */
+  max-height: calc(100vh - 180px);
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1200;
+  /* permitir scroll vertical cuando el contenido crece */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: none; /* Oculto por defecto para evitar overflow-x cuando está cerrado */
+  pointer-events: none; /* Evitar interacciones cuando está oculto */
+}
+
+.audioia-section.open {
+  display: block;
+  pointer-events: auto;
+}
+
+/* Colaboradores Panel */
+.collab-toggle-container {
+  position: absolute;
+  top: 200px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.collab-toggle-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: #007bff;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s;
+}
+
+.collab-toggle-btn:hover {
+  background: #0056b3;
+  transform: scale(1.05);
+}
+
+.collab-section {
+  position: absolute;
+  top: 260px;
+  right: 20px;
+  width: 320px;
+  max-height: 500px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 999;
+  transform: translateX(350px);
+  transition: transform 0.3s ease;
+  overflow: hidden;
+}
+
+.collab-section.open {
+  transform: translateX(0);
+}
+
+.collab-panel {
+  padding: 16px;
+}
+
+.collab-head {
+  font-size: 16px;
+  font-weight: 600;
+  color: #343a40;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.collab-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.collab-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.collab-item .name {
+  font-weight: 600;
+  color: #343a40;
+  font-size: 14px;
+}
+
+.collab-item .meta {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.collab-item .icon {
+  background: none;
+  border: none;
+  color: #dc3545;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.collab-item .icon:hover {
+  background: #f8d7da;
+}
+
+.collab-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #dee2e6;
+}
+
+.collab-form input, .collab-form select {
+  padding: 6px 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.ai-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color 0.2s;
+}
+
+.ai-btn.primary {
+  background: #007bff;
+  color: white;
+}
+
+.ai-btn.primary:hover {
+  background: #0056b3;
+}
+
+.empty {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  padding: 16px;
+}
+
+/* Actividades Panel */
+.activity-toggle-container {
+  position: absolute;
+  bottom: 80px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.activity-toggle-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: #ffc107;
+  color: #212529;
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s;
+}
+
+.activity-toggle-btn:hover {
+  background: #e0a800;
+  transform: scale(1.05);
+}
+
+.activity-section {
+  position: absolute;
+  bottom: 140px;
+  right: 20px;
+  width: 320px;
+  max-height: 400px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 999;
+  transform: translateX(350px);
+  transition: transform 0.3s ease;
+  overflow: hidden;
+}
+
+.activity-section.open {
+  transform: translateX(0);
+}
+
+.activity-panel {
+  padding: 16px;
+}
+
+.activity-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.activity-item {
+  padding: 8px;
+  border-left: 3px solid #007bff;
+  margin-bottom: 12px;
+  background: #f8f9fa;
+  border-radius: 0 4px 4px 0;
+}
+
+.activity-item .meta-time {
+  font-size: 11px;
+  color: #6c757d;
+  margin-bottom: 4px;
+}
+
+.activity-item .message {
+  font-size: 14px;
+  color: #343a40;
+}
+
+/* JointJS Overrides */
+.joint-paper {
+  background: #fdfdfd !important;
+}
+
+.joint-paper .joint-cells-layer {
+  pointer-events: all;
+}
+
+/* Fix para elementos UML */
+.edit-btn, .delete-btn {
+  cursor: pointer !important;
+  user-select: none !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 240px;
+  }
+  
+  .collab-section, .activity-section, .audioia-section {
+    width: min(92vw, 420px);
+    right: 10px;
+  }
+  .audioia-section {
+    top: 150px;
+    max-height: calc(100vh - 120px);
+    padding: 10px;
+  }
+  
+  .modal {
+    width: 95vw;
+    margin: 0 10px;
+  }
+}
+
+/* Agregar estos estilos a tu DiagramCss.css */
+
+/* Controles de zoom mejorados */
+.zoom-controls {
+  position: absolute;
+  top: calc(100vh - 80px);
+  right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 8px 12px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #dee2e6;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  color: #495057;
+}
+
+.zoom-btn:hover {
+  background: #f8f9fa;
+  border-color: #007bff;
+  color: #007bff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.2);
+}
+
+.zoom-btn:active {
+  transform: translateY(0);
+}
+
+/* Botón especial para fit */
+.zoom-btn.fit-btn {
+  background: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.zoom-btn.fit-btn:hover {
+  background: #0056b3;
+  border-color: #0056b3;
+  color: white;
+}
+
+.zoom-level {
+  font-size: 13px;
+  font-weight: 700;
+  color: #343a40;
+  min-width: 45px;
+  text-align: center;
+  padding: 0 4px;
+  user-select: none;
+}
+
+/* Hint de zoom */
+.zoom-hint {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.75);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  z-index: 999;
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+.zoom-hint:hover {
+  opacity: 1;
+}
+
+/* Mejoras para el canvas */
+.canvas {
+  position: relative !important;
+  flex: 1 !important;
+  min-width: 300px !important;
+  min-height: 400px !important;
+  background: #f8f9fa !important;
+  overflow: hidden !important;
+  cursor: grab;
+}
+
+.canvas:active {
+  cursor: grabbing;
+}
+
+/* Read-only canvas: show not-allowed cursor */
+.canvas.readonly {
+  cursor: not-allowed;
+}
+
+/* Responsive para controles de zoom */
+@media (max-width: 768px) {
+  .zoom-controls {
+    top: calc(100vh - 70px);
+    right: 10px;
+    padding: 6px 8px;
+    gap: 4px;
+  }
+  
+  .zoom-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+  
+  .zoom-level {
+    font-size: 11px;
+    min-width: 35px;
+  }
+  
+  .zoom-hint {
+    bottom: 10px;
+    right: 10px;
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+}
+
+/* Animaciones suaves para el zoom */
+.joint-paper {
+  transition: transform 0.2s ease-out !important;
+}
+
+/* Estilos para cuando el diagrama está siendo escalado */
+.canvas.zooming .joint-paper {
+  transition: none !important;
 }

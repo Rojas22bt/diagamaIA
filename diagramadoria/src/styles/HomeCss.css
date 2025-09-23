@@ -1,6 +1,7 @@
 .home-contenedor {
     display: flex;
-    min-height: calc(100vh - 60px);
+    height: 100%;
+    overflow: hidden;
     /* background: linear-gradient(120deg, #375887 0%, #0037fc  100%); */
 }
 
@@ -14,49 +15,125 @@
 }
 
 .home-contenedor #lista-proyectos {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    background-color: white;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    background: linear-gradient(195deg, #1810ff 0%, #9d9fc6 100%);
     width: 100%;
-    min-height: 100vh;
-    max-height: auto;
+    height: 100%;
     border-radius: 8px;
     padding: 20px;
      box-shadow: 0px 2px 4px rgba(2, 93, 229, 0.5);
-    justify-content: space-between;
-    gap: 10px;
+    gap: 14px;
 }
 
 .proyectos {
     display: flex;
     flex-direction: column;
-    width: 300px;
-    height: 250px;
-    justify-content: space-between;
+    min-height: 180px;
+    justify-content: flex-start;
     align-items: center;
     border-radius: 10px;
     box-shadow: 0px 2px 4px rgba(2, 93, 229, 0.5);
+    padding: 14px;
+    background-color: #ffff;
+    transition: transform .15s ease, box-shadow .2s ease;
+    cursor: pointer;
 }
 
+.proyectos:hover {
+    transform: translateY(-2px);
+    box-shadow: 0px 6px 18px rgba(2, 93, 229, 0.25);
+}
+
+.proj-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    align-items: baseline;
+}
+.proj-head h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    max-width: 70%;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+.proj-head .time {
+    color: #6b7280;
+    font-size: .8rem;
+}
+.desc {
+    width: 100%;
+    color: #374151;
+    margin: 8px 0 12px;
+    max-height: 58px;
+    overflow: hidden;
+}
+.proj-actions {
+    margin-top: auto;
+    display: flex;
+    gap: 8px;
+}
+.proj-actions .btn {
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+.proj-actions .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid #e5e7eb;
+    background: white;
+}
+.proj-actions .icon.danger { border-color: #fecaca; color: #b91c1c; }
+.empty { color: #6b7280; font-style: italic; }
+
+
+.actions-bar {
+    margin: 6px 10px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+.searchbox {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,.2);
+    border: 1px solid rgba(255,255,255,.35);
+    padding: 6px 10px;
+    border-radius: 8px;
+    width: 50%;
+}
+.searchbox input { background: transparent; border: none; color: white; outline: none; }
 
 #nuevo {
     position: fixed;
     bottom: 25px;
-    right: 25px;
+    right: 5px;
     background: linear-gradient(135deg, #1cd2e6 0%, #0512ff 100%);
     color: white;
     border: none;
-    border-radius: 80%;
-    width: 45px;
-    height: 50px;
+    border-radius: 50%;
+    width: 50px;
+    height: 55px;
     font-size: 2.2rem;
     display: flex;
-    align-content: center;
     justify-content: center;
+    align-items: center;
     cursor: pointer;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     transition: background-color 0.3s ease, transform 0.2s ease;
+    z-index: 1000;
 }
 
 #nuevo:hover {
@@ -67,7 +144,7 @@
     width: 100%;
     border-radius: 5px;
     box-shadow: 0px 2px 4px rgba(2, 93, 229, 0.5);
-    background: linear-gradient(135deg, #1cd2e6 0%, #0512ff 100%);
+    background: linear-gradient(185deg, #25474a 0%, #04062e 100%);
     
 }
 

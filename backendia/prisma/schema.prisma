@@ -1,0 +1,86 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id_usuario   Int      @id @default(autoincrement())
+  nombre       String?
+  correo       String   @unique
+  contrasena   String
+
+  Detalle_Proyecto          Detalle_Proyecto[]
+  InvitacionesEnviadas      Invitacion[] @relation("InvitacionRemitente")
+  InvitacionesRecibidas     Invitacion[] @relation("InvitacionDestinatario")
+}
+
+model Proyecto {
+  id_proyecto   Int      @id @default(autoincrement())
+  titulo        String
+  fecha_inicio  DateTime
+  diagrama_json Json?
+  estado        String
+
+  Detalle_Proyecto Detalle_Proyecto[]
+  Invitaciones     Invitacion[]
+}
+
+model Permisos {
+  id_permiso   Int      @id @default(autoincrement())
+  descripcion  String
+
+  Detalle_Proyecto Detalle_Proyecto[]
+  Invitaciones     Invitacion[]
+}
+
+model Detalle_Proyecto {
+  id_detalle    Int       @id @default(autoincrement())
+  id_usuario    Int
+  id_proyecto   Int
+  id_permiso    Int
+
+  Usuario       Usuario   @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+  Proyecto      Proyecto  @relation(fields: [id_proyecto], references: [id_proyecto], onDelete: Cascade)
+  Permisos      Permisos  @relation(fields: [id_permiso], references: [id_permiso], onDelete: Cascade)
+  Acciones_Proyecto Acciones_Proyecto[]
+
+  @@unique([id_usuario, id_proyecto, id_permiso])
+}
+
+model Acciones_Proyecto {
+  id_accion    Int       @id @default(autoincrement())
+  id_detalle   Int
+  accion       String
+  fecha_hora   DateTime  @default(now())
+
+  Detalle_Proyecto Detalle_Proyecto @relation(fields: [id_detalle], references: [id_detalle], onDelete: Cascade)
+}
+
+model Invitacion {
+  id_invitacion    Int       @id @default(autoincrement())
+  id_proyecto      Int
+  id_remitente     Int       // Usuario que envía la invitación
+  id_destinatario  Int       // Usuario que recibe la invitación
+  id_permiso       Int       // Permiso que se otorgará al aceptar
+  estado          String     @default("pendiente") // pendiente, aceptada, rechazada
+  fecha_envio     DateTime   @default(now())
+  fecha_respuesta DateTime?
+
+  Proyecto        Proyecto  @relation(fields: [id_proyecto], references: [id_proyecto], onDelete: Cascade)
+  Remitente       Usuario   @relation("InvitacionRemitente", fields: [id_remitente], references: [id_usuario], onDelete: Cascade)
+  Destinatario    Usuario   @relation("InvitacionDestinatario", fields: [id_destinatario], references: [id_usuario], onDelete: Cascade)
+  Permiso         Permisos  @relation(fields: [id_permiso], references: [id_permiso], onDelete: Cascade)
+
+  @@unique([id_proyecto, id_destinatario]) // Un usuario no puede tener múltiples invitaciones al mismo proyecto
+  @@map("invitaciones")
+}

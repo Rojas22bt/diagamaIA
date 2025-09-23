@@ -1,15 +1,20 @@
 import { Routes, Route } from "react-router-dom"
-import Dashboard from "../components/dashboard/Dashboard"
 import LoginPage from "../pages/LoginPage"
-// import DiagramPage from "../pages/DiagramPage"
-import DiagramaPage from "../pages/DiagramaPage"
+import ConnectedDiagramPage from "../pages/ConnectedDiagramPage"
+// import DiagramOnlyPage from "../pages/DiagramOnlyPage"
+import ProjectDashboard from "../pages/ProjectDashboard"
+import InvitationPanel from "../components/dashboard/InvitationPanel"
 
 const AppRoutes = () => {
     return (
         <Routes>
             <Route path="/" element={<LoginPage />} />
-            <Route path="/diagram" element={<DiagramaPage />} />
-            <Route path="/dashboard/*" element={<Dashboard />} />
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/dashboard" element={<ProjectDashboard />} />
+            <Route path="/invitations" element={<InvitationPanel />} />
+            <Route path="/projects/:projectId/invite" element={<InvitationPanel />} />
+            <Route path="/diagram/:projectId" element={<ConnectedDiagramPage />} />
+            {/* Rutas antiguas eliminadas para evitar duplicidad */}
         </Routes>
     )
 }

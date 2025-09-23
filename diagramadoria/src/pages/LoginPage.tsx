@@ -1,20 +1,50 @@
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSelector } from 'react-redux';
+import { useAppDispatch } from '../store/store';
+import { login, register } from '../store/authSlice';
+import type { RootState } from '../store/store';
 import '../styles/LoginCss.css'
 
 const LoginPage = () => {
-  const navigate = useNavigate();
+    const navigate = useNavigate();
+    const dispatch = useAppDispatch();
+    const [isRegister, setIsRegister] = useState<boolean>(false);
+    // const loading = useSelector((state: RootState) => state.auth.loading);
+    // const error = useSelector((state: RootState) => state.auth.error);
+    const token = useSelector((state: RootState) => state.auth.token);
 
-  const [isRegister, setIsRegister] = useState<boolean>(false);
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            const formData = new FormData(e.target as HTMLFormElement);
+            const nombre = formData.get('name') as string;
+            const correo  = formData.get('username') as string;
+            const confirm = formData.get('confirm') as string;
+            const contrasena = formData.get('password') as string;
+            if (isRegister) {
+                if (contrasena !== confirm) {
+                    alert("Las contraseñas no coinciden");
+                    return;
+                }
+                await dispatch(register({ correo, contrasena, nombre}));
+            } else {
+                console.log("Intentando iniciar sesión con:", { correo, contrasena });
+                await dispatch(login({ correo, contrasena }));
+            }    
+        } catch (error) {
+            console.error("Error en el proceso de autenticación:", error);
+        }
+    };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsRegister(true);
-    navigate("/dashboard/home");
-  }
+    useEffect(() => {
+        if (token) {
+            navigate('/dashboard');  // Ir al ProjectDashboard (proyectos colaborativos)
+        }
+    }, [token, navigate]);
 
-  return (
-     <div className='contenedor-principal'>
+    return (
+        <div className='contenedor-principal'>
             <form onSubmit={handleSubmit}>
                 <div id='titulo'>
                     <div
@@ -62,7 +92,7 @@ const LoginPage = () => {
                 <button type='submit'>{isRegister ? 'Registrarse' : 'Login'}</button>
             </form>
         </div>
-  );
+    );
 };
 
 export default LoginPage;
