@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const axiosInstance = axios.create({
-  baseURL: 'https://diagamaia.onrender.com/api', // Cambia la URL según tu backend
+  // baseURL: 'http://localhost:3000/api',
+  baseURL: 'https://diagamaia.onrender.com/api', 
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
