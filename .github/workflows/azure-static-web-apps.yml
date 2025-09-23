@@ -1,0 +1,40 @@
+name: Azure Static Web Apps CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: diagramadoria
+        run: npm ci
+
+      - name: Build
+        working-directory: diagramadoria
+        env:
+          # Ajusta esta URL si tu backend cambia
+          VITE_API_BASE_URL: https://diagamaia.onrender.com
+        run: npm run build
+
+      - name: Deploy to Azure Static Web Apps
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: diagramadoria
+          output_location: dist
+          app_artifact_location: diagramadoria/dist
+          skip_app_build: true
