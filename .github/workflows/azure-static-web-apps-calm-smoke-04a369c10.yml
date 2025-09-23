@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - main
+      - master
   pull_request:
     types: [opened, synchronize, reopened, closed]
     branches:
       - main
+      - master
 
 jobs:
   build_and_deploy_job:
@@ -40,11 +42,10 @@ jobs:
           action: "upload"
           ###### Repository/Build Configurations - These values can be configured to match your app requirements. ######
           # For more information regarding Static Web App workflow configurations, please visit: https://aka.ms/swaworkflowconfig
-          app_location: "./diagramadoria" # App source code path
-          api_location: "" # Api source code path - optional
-          output_location: "dist" # Built app content directory - optional (Vite)
-          app_artifact_location: "diagramadoria/dist" # Upload prebuilt artifacts
-          skip_app_build: true # Avoid Oryx build with Node 18
+          # IMPORTANT: We upload only the prebuilt assets to avoid including node_modules or other large files
+          app_location: "diagramadoria/dist" # Upload only built app content
+          api_location: "" # No API for this SWA
+          skip_app_build: true # Skip Oryx build, we already built above
           ###### End of Repository/Build Configurations ######
 
   close_pull_request_job:
