@@ -7,8 +7,11 @@ import invitationRoutes from './routes/invitation.routes.js';
 const app = express();
 app.use(express.json());
 
+// Allow configuring CORS via env in production
+const defaultOrigins = ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'];
+const envOrigins = process.env.CORS_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:3000'],
+    origin: envOrigins && envOrigins.length > 0 ? envOrigins : defaultOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization']
@@ -17,5 +20,10 @@ app.use(cors({
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/invitations', invitationRoutes);
+
+// Health check endpoint for Render
+app.get('/health', (_req, res) => {
+    res.status(200).json({ status: 'ok', uptime: process.uptime() });
+});
 
 export default app;

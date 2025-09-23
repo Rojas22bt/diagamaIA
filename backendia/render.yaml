@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: backendia
+    env: node
+    plan: free
+    rootDir: backendia
+    buildCommand: npm ci && npm run build && npm run prisma:migrate:deploy
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: NODE_ENV
+        value: production
+    healthCheckPath: /health
