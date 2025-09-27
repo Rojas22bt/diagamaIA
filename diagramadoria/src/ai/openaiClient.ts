@@ -335,6 +335,40 @@ Salida: [{"type":"create_relation","originNumber":1,"destNumber":2,"relationType
   }
 }
 
+// --- Audio transcription (Whisper) ---
+export async function transcribeAudio(
+  audio: Blob,
+  opts?: { language?: string; translate?: boolean }
+): Promise<string> {
+  if (!OPENAI_API_KEY) return '';
+  try {
+    const form = new FormData();
+    // Use a File to provide a filename expected by the API
+    const file = new File([audio], 'audio.webm', { type: audio.type || 'audio/webm' });
+    form.append('file', file);
+    form.append('model', 'whisper-1');
+    if (opts?.language) form.append('language', opts.language);
+    if (opts?.translate) form.append('translate', 'true');
+    form.append('response_format', 'json');
+
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+      body: form
+    });
+    if (!res.ok) {
+      console.error('OpenAI Whisper error', await res.text());
+      return '';
+    }
+    const data = await res.json();
+    const text: string = data?.text || '';
+    return text;
+  } catch (e) {
+    console.error('transcribeAudio error', e);
+    return '';
+  }
+}
+
 // Suggest attributes for existing classes based on project title and class names
 export async function suggestAttributesForClasses(
   projectTitle: string,
