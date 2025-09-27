@@ -4,6 +4,7 @@ import ConnectedDiagramPage from "../pages/ConnectedDiagramPage"
 // import DiagramOnlyPage from "../pages/DiagramOnlyPage"
 import ProjectDashboard from "../pages/ProjectDashboard"
 import InvitationPanel from "../components/dashboard/InvitationPanel"
+import GenerationBackendSprintBoot from "../pages/GenerationBackendSprintBoot"
 
 const AppRoutes = () => {
     return (
@@ -14,6 +15,7 @@ const AppRoutes = () => {
             <Route path="/invitations" element={<InvitationPanel />} />
             <Route path="/projects/:projectId/invite" element={<InvitationPanel />} />
             <Route path="/diagram/:projectId" element={<ConnectedDiagramPage />} />
+            <Route path="/generate/:projectId" element={<GenerationBackendSprintBoot />} />
             {/* Rutas antiguas eliminadas para evitar duplicidad */}
         </Routes>
     )

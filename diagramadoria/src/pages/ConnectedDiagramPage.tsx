@@ -9,7 +9,7 @@ import '../styles/DiagramCss.css'
 import AudioIAPage from './AudioIAPage'
 import 'jointjs/dist/joint.css'
 import type { ActionSuggestion } from '../ai/openaiClient'
-import { suggestAttributesForClasses, type AttributeSuggestion } from '../ai/openaiClient'
+import { suggestAttributesForClasses, type AttributeSuggestion, suggestClassesFromProjectTitle, type ClassSuggestion, suggestRelationsFromProjectTitle, type RelationSuggestion } from '../ai/openaiClient'
 import { addActivity, setActiveProjectId, getActiveProjectId, getActivities } from '../utils/collaboration'
 import { projectApi } from '../api/projectApi';
 import { invitationApi } from '../api/invitationApi';
@@ -92,6 +92,14 @@ const ConnectedDiagramPage: React.FC = () => {
     const [openReco, setOpenReco] = useState<boolean>(false);
     const [recoLoading, setRecoLoading] = useState<boolean>(false);
     const [recoList, setRecoList] = useState<AttributeSuggestion[]>([]);
+    // Nueva sección: recomendaciones de CLASES/tablas basadas en el título del proyecto
+    const [openClassReco, setOpenClassReco] = useState<boolean>(false);
+    const [classRecoLoading, setClassRecoLoading] = useState<boolean>(false);
+    const [classRecoList, setClassRecoList] = useState<ClassSuggestion[]>([]);
+    // Recomendaciones de RELACIONES
+    const [openRelReco, setOpenRelReco] = useState<boolean>(false);
+    const [relRecoLoading, setRelRecoLoading] = useState<boolean>(false);
+    const [relRecoList, setRelRecoList] = useState<RelationSuggestion[]>([]);
     const [collabDraft, setCollabDraft] = useState<{name: string; email: string; role: 'editor' | 'vista'}>({name: '', email: '', role: 'editor'});
     // Colaboradores desde el backend (sincronizados)
     type ServerCollab = { userId: number; name: string; email: string; role: 'editor' | 'vista'; isCreator?: boolean };
@@ -257,6 +265,75 @@ const ConnectedDiagramPage: React.FC = () => {
             console.error('Error en scheduleAutoSave:', err);
         }
     };
+
+    // Agregar una clase sugerida por IA al diagrama (visible para todos via WebSocket)
+    const addSuggestedClass = (suggestion: ClassSuggestion) => {
+        if (!graph || !(myRole === 'creador' || myRole === 'editor')) return;
+        const name = (suggestion.name || '').trim() || 'Clase';
+        if (!name) return;
+        // evita duplicar por nombre
+        if (classesRef.current.some(c => c.name.toLowerCase() === name.toLowerCase())) return;
+
+        const id = Date.now();
+        const x = 120 + classesRef.current.length * 60;
+        const y = 120 + classesRef.current.length * 60;
+        const displayId = nextNumberRef.current;
+        const attributes = (suggestion.attributes || []).map(a => `${a.name}: ${a.type}`);
+    const methods: string[] = [];
+
+    const labelText = `${name}\n-----------------------\n${attributes.join('\n')}`;
+        const fontSize = 12;
+        const paddingX = 20; const paddingY = 30;
+        const lines = labelText.split('\n');
+        let maxLineWidth = 0; lines.forEach(line => { const m = measureText(line, fontSize); if (m.width > maxLineWidth) maxLineWidth = m.width; });
+        const width = Math.max(220, maxLineWidth + paddingX);
+        const height = fontSize * lines.length + paddingY;
+
+        const rect = new joint.shapes.standard.Rectangle();
+        rect.position(x, y);
+        rect.resize(width, height);
+        rect.attr({
+            body: { fill: '#fff', stroke: '#3986d3', strokeWidth: 2, rx: 20, ry: 20, filter: { name: 'dropShadow', args: { dx: 0, dy: 2, blur: 2, color: '#3986d3', opacity: 0.15 } } },
+            label: { text: labelText, fontWeight: 'bold', fontSize, fill: '#2477c3', fontFamily: 'monospace', xAlignment: 'middle' },
+            idBg: { x: 10, y: 10, width: 26, height: 18, fill: '#2477c3', rx: 4, ry: 4 },
+            idBadge: { text: String(displayId), x: 23, y: 23, fontSize: 12, fontWeight: 'bold', fill: '#ffffff', textAnchor: 'middle' }
+        });
+        rect.markup = [
+            { tagName: 'rect', selector: 'body' },
+            { tagName: 'text', selector: 'label' },
+            { tagName: 'rect', selector: 'idBg' },
+            { tagName: 'text', selector: 'idBadge' },
+            { tagName: 'g', children: [
+                { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
+                { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
+            ]}
+        ];
+        rect.addTo(graph);
+        clampElementInside(rect);
+
+        setClasses(prev => [...prev, { id, name, x, y, displayId, attributes, methods, element: rect }]);
+        setNextNumber(n => n + 1);
+
+        const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
+        if (pidNum) {
+            const selfId = Number(localStorage.getItem('userId') || 0);
+            const selfName = getUserDisplay(selfId);
+            addActivity(String(pidNum), { type: 'create_class', message: `${selfName} creó clase #${displayId} (${name})`, byUserId: selfId, byName: selfName });
+            setActivities(getActivities(String(pidNum)));
+            try {
+                const newNode: UMLClassNode = { id: `c-${displayId}`, displayId, name, position: { x, y }, size: { width, height }, attributes: attributes.map((line: string) => parseAttrString(line)), methods: [] };
+                const payload: DiagramUpdate = { projectId: pidNum, userId: Number(localStorage.getItem('userId') || 0), diagramData: { node: newNode }, changeType: 'create_class', elementId: displayId, timestamp: new Date().toISOString() };
+                try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch {}
+                socketService.sendDiagramUpdate(payload);
+                scheduleAutoSave();
+            } catch {}
+        }
+    };
+
+    // const addAllSuggestedClasses = () => {
+    //     if (!(myRole === 'creador' || myRole === 'editor')) return;
+    //     classRecoList.forEach(s => addSuggestedClass(s));
+    // };
 
     // Resaltar clases cuando se escribe el número de origen/destino
     useEffect(() => {
@@ -674,7 +751,7 @@ const ConnectedDiagramPage: React.FC = () => {
                         const newName = name ?? cls.name;
                         const newAttrs: UMLAttribute[] = attributes ?? cls.attributes.map(parseAttrString);
                         const newMethods: UMLMethod[] = methods ?? cls.methods.map(parseMethodString);
-                        const labelText = toLabelText(newName, newAttrs, newMethods);
+                        const labelText = toLabelText(newName, newAttrs);
                         let width = size?.width, height = size?.height;
                         if (typeof width !== 'number' || typeof height !== 'number') {
                             const fontSize = 12; const paddingX = 20; const paddingY = 30;
@@ -907,7 +984,7 @@ const ConnectedDiagramPage: React.FC = () => {
                         const newName = name ?? cls.name;
                         const newAttrs: UMLAttribute[] = attributes ?? cls.attributes.map(parseAttrString);
                         const newMethods: UMLMethod[] = methods ?? cls.methods.map(parseMethodString);
-                        const labelText = toLabelText(newName, newAttrs, newMethods);
+                        const labelText = toLabelText(newName, newAttrs);
                         let width = size?.width, height = size?.height;
                         if (typeof width !== 'number' || typeof height !== 'number') {
                             const fontSize = 12; const paddingX = 20; const paddingY = 30;
@@ -1161,10 +1238,10 @@ const ConnectedDiagramPage: React.FC = () => {
     };
 
     // Utilidades de modelo estructurado
-    const toLabelText = (name: string, attrs: UMLAttribute[], methods: UMLMethod[]) => {
+    const toLabelText = (name: string, attrs: UMLAttribute[]) => {
         const attrsText = attrs.map(a => `${a.name}: ${a.type || 'Any'}`);
-        const methodsText = methods.map(m => `${m.name}(): ${m.returns || 'void'}`);
-        return `${name}\n-----------------------\n${attrsText.join('\n')}\n-----------------------\n${methodsText.join('\n')}`;
+        // Mostrar solo título y atributos
+        return `${name}\n-----------------------\n${attrsText.join('\n')}`;
     };
 
     const parseAttrString = (line: string): UMLAttribute => {
@@ -1233,7 +1310,7 @@ const ConnectedDiagramPage: React.FC = () => {
         for (const node of classList) {
             console.log('Rendering class:', node.name, 'at position:', node.position);
             
-            const labelText = toLabelText(node.name, node.attributes, node.methods);
+            const labelText = toLabelText(node.name, node.attributes);
             const fontSize = 12;
             let width = 220;
             let height = 140;
@@ -1376,7 +1453,7 @@ const ConnectedDiagramPage: React.FC = () => {
 
     // Helper: add a single class node to the graph/state
     const addClassNode = (node: UMLClassNode, g: joint.dia.Graph, includeButtons: boolean = true): ClassType => {
-        const labelText = toLabelText(node.name, node.attributes, node.methods);
+    const labelText = toLabelText(node.name, node.attributes);
         const fontSize = 12;
         let width = 220;
         let height = 140;
@@ -1638,9 +1715,7 @@ const ConnectedDiagramPage: React.FC = () => {
                 const y = 120 + classes.length * 60;
                 const displayId = nextNumber;
                 const attributes = (action.attributes || []).map(a => `${a.name}: ${a.type || 'Any'}`);
-                const methods = (action.methods || []).map(m => `${m.name}(): ${m.returns || 'void'}`);
-
-                const labelText = `${name}\n-----------------------\n${attributes.join('\n')}\n-----------------------\n${methods.join('\n')}`;
+                const labelText = `${name}\n-----------------------\n${attributes.join('\n')}`;
                 const fontSize = 12;
                 const paddingX = 20;
                 const paddingY = 30;
@@ -1677,7 +1752,7 @@ const ConnectedDiagramPage: React.FC = () => {
                 ];
                 rect.addTo(graph);
                 clampElementInside(rect);
-                setClasses(prev => [...prev, { id, name, x, y, displayId, attributes, methods, element: rect }]);
+                setClasses(prev => [...prev, { id, name, x, y, displayId, attributes, methods: [], element: rect }]);
                 setNextNumber(n => n + 1);
                 const pidNumAI = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
                 if (pidNumAI) {
@@ -1686,7 +1761,7 @@ const ConnectedDiagramPage: React.FC = () => {
                     addActivity(String(pidNumAI), { type: 'create_class', message: `${selfName} creó clase #${displayId} (${name})`, byUserId: selfId, byName: selfName });
                     setActivities(getActivities(String(pidNumAI)));
                     try {
-                        const newNode: UMLClassNode = { id: `c-${displayId}`, displayId, name, position: { x, y }, size: { width, height }, attributes: attributes.map((line: string) => parseAttrString(line)), methods: methods.map((line: string) => parseMethodString(line)) };
+                        const newNode: UMLClassNode = { id: `c-${displayId}`, displayId, name, position: { x, y }, size: { width, height }, attributes: attributes.map((line: string) => parseAttrString(line)), methods: [] };
                         const payload: DiagramUpdate = { projectId: pidNumAI, userId: Number(localStorage.getItem('userId') || 0), diagramData: { node: newNode }, changeType: 'create_class', elementId: displayId, timestamp: new Date().toISOString() };
                         // Join room if not yet
                         try { if (socketService.isConnected() && !socketService.isInProject(pidNumAI)) socketService.joinProject(pidNumAI); } catch {}
@@ -1708,6 +1783,37 @@ const ConnectedDiagramPage: React.FC = () => {
                 setTimeout(() => crearRelacion(), 50);
                 return;
             }
+            if (action.type === 'delete_relation') {
+                if (!graph) return;
+                const origen = classes.find(c => c.displayId === Number(action.originNumber));
+                const destino = classes.find(c => c.displayId === Number(action.destNumber));
+                if (!origen?.element || !destino?.element) return;
+                try {
+                    const links = (graph as any).getLinks ? (graph as any).getLinks() : [];
+                    const aId = (origen.element as any).id;
+                    const bId = (destino.element as any).id;
+                    let removed = false;
+                    links.forEach((l: any) => {
+                        const s = l.get('source'); const t = l.get('target');
+                        const sid = s && s.id; const tid = t && t.id;
+                        if ((sid === aId && tid === bId) || (sid === bId && tid === aId)) {
+                            suppressLinkEmitRef.current = true; try { l.remove(); removed = true; } catch {} suppressLinkEmitRef.current = false;
+                        }
+                    });
+                    if (removed) {
+                        setRelations(prev => prev.filter(r => !((r.fromDisplayId === origen.displayId && r.toDisplayId === destino.displayId) || (r.fromDisplayId === destino.displayId && r.toDisplayId === origen.displayId))));
+                        const pid = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
+                        if (pid) {
+                            const minimal = { fromDisplayId: origen.displayId, toDisplayId: destino.displayId };
+                            const payload: DiagramUpdate = { projectId: pid, userId: Number(localStorage.getItem('userId') || 0), diagramData: minimal, changeType: 'delete_relation', elementId: undefined, timestamp: new Date().toISOString() };
+                            try { if (socketService.isConnected() && !socketService.isInProject(pid)) socketService.joinProject(pid); } catch {}
+                            socketService.sendDiagramUpdate(payload);
+                            scheduleAutoSave();
+                        }
+                    }
+                } catch {}
+                return;
+            }
         }
         window.addEventListener('diagram-ai-action', onAIAction as EventListener);
         return () => window.removeEventListener('diagram-ai-action', onAIAction as EventListener);
@@ -1720,10 +1826,10 @@ const ConnectedDiagramPage: React.FC = () => {
         const x = 100 + classes.length * 50;
         const y = 100 + classes.length * 50;
         const displayId = nextNumber;
-        const attributes: string[] = ['atributo1: String', 'atributo2: Int'];
-        const methods: string[] = ['metodo1()', 'metodo2()'];
+    const attributes: string[] = ['atributo1: String', 'atributo2: Int'];
+    const methods: string[] = [];
 
-        const labelText = `${name}\n-----------------------\n${attributes.join('\n')}\n-----------------------\n${methods.join('\n')}`;
+    const labelText = `${name}\n-----------------------\n${attributes.join('\n')}`;
         const fontSize = 12;
         const paddingX = 20;
         const paddingY = 30;
@@ -1833,7 +1939,7 @@ const ConnectedDiagramPage: React.FC = () => {
     rect.addTo(graph);
     clampElementInside(rect);
 
-        setClasses([...classes, { id, name, x, y, displayId, attributes, methods, element: rect }]);
+    setClasses([...classes, { id, name, x, y, displayId, attributes, methods, element: rect }]);
         setNextNumber(n => n + 1);
         const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
         if (pidNum) {
@@ -1842,7 +1948,7 @@ const ConnectedDiagramPage: React.FC = () => {
             addActivity(String(pidNum), { type: 'create_class', message: `${selfName} creó clase #${displayId} (${name})`, byUserId: selfId, byName: selfName });
             setActivities(getActivities(String(pidNum)));
             try {
-                const newNode: UMLClassNode = { id: `c-${displayId}`, displayId, name, position: { x, y }, size: { width, height }, attributes: attributes.map((line: string) => parseAttrString(line)), methods: methods.map((line: string) => parseMethodString(line)) };
+                const newNode: UMLClassNode = { id: `c-${displayId}`, displayId, name, position: { x, y }, size: { width, height }, attributes: attributes.map((line: string) => parseAttrString(line)), methods: [] };
                 const payload: DiagramUpdate = { projectId: pidNum, userId: Number(localStorage.getItem('userId') || 0), diagramData: { node: newNode }, changeType: 'create_class', elementId: displayId, timestamp: new Date().toISOString() };
                 try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch {}
                 socketService.sendDiagramUpdate(payload);
@@ -1993,6 +2099,119 @@ const ConnectedDiagramPage: React.FC = () => {
                 scheduleAutoSave();
             } catch {}
         }
+    };
+
+    // Aplica una relación sugerida por IA entre dos clases por nombre
+    const applySuggestedRelation = (rel: RelationSuggestion) => {
+        if (!graph || !(myRole === 'creador' || myRole === 'editor')) return;
+        const origen = classesRef.current.find(c => c.name.toLowerCase() === rel.originName.toLowerCase());
+        const destino = classesRef.current.find(c => c.name.toLowerCase() === rel.destName.toLowerCase());
+        if (!origen?.element || !destino?.element) return;
+
+        // Si ya existe una relación entre estas dos clases, elimínala para dejar solo la nueva
+        try {
+            const links = (graph as any).getLinks ? (graph as any).getLinks() : [];
+            const aId = (origen.element as any).id;
+            const bId = (destino.element as any).id;
+            links.forEach((l: any) => {
+                const s = l.get('source'); const t = l.get('target');
+                const sid = s && s.id; const tid = t && t.id;
+                if ((sid === aId && tid === bId) || (sid === bId && tid === aId)) { suppressLinkEmitRef.current = true; try { l.remove(); } catch {} suppressLinkEmitRef.current = false; }
+            });
+        } catch {}
+
+        const relationType = (rel.relationType || 'asociacion') as UMLRelationType;
+        const originCard = relationType === 'asociacion' ? (rel.originCard || '1..1') : undefined;
+        const destCard = relationType === 'asociacion' ? (rel.destCard || '1..1') : undefined;
+        const verb = relationType === 'asociacion' ? (rel.verb || undefined) : undefined;
+
+        const link = new joint.shapes.standard.Link();
+        link.source(origen.element);
+        link.target(destino.element);
+        let lineAttrs: any = { stroke: '#0b132b', strokeWidth: 2 };
+        if (relationType === 'herencia') {
+            lineAttrs.targetMarker = { type: 'path', d: 'M 15 0 L 0 -10 L 0 10 Z', fill: '#ffffff', stroke: '#0b132b', strokeWidth: 2 };
+        } else if (relationType === 'agregacion' || relationType === 'composicion') {
+            lineAttrs.targetMarker = { type: 'path', d: 'M 0 0 L 10 -7 L 20 0 L 10 7 Z', fill: '#ffffff', stroke: '#0b132b', strokeWidth: 2 };
+        }
+        link.attr({ line: lineAttrs });
+        if (relationType === 'asociacion') {
+            const labels: any[] = [];
+            if (originCard) labels.push({ position: 0.15, attrs: { text: { text: originCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
+            if (destCard) labels.push({ position: 0.85, attrs: { text: { text: destCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
+            if (verb) labels.push({ position: 0.5, attrs: { text: { text: verb, fill: '#111', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#fff', stroke: '#e5e7eb', strokeWidth: 1, rx: 6, ry: 6, opacity: 0.9 } } });
+            try { link.labels(labels as any); } catch {}
+        }
+        link.connector('smooth');
+        creatingLinkRef.current = true;
+        link.addTo(graph);
+        creatingLinkRef.current = false;
+
+        // Actualiza estado estructurado
+        setRelations(prev => {
+            const newRel: UMLRelation = {
+                id: `r-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+                fromDisplayId: origen.displayId,
+                toDisplayId: destino.displayId,
+                type: relationType,
+                originCard,
+                destCard,
+                verb
+            };
+            const filtered = prev.filter(r => !( (r.fromDisplayId === newRel.fromDisplayId && r.toDisplayId === newRel.toDisplayId) || (r.fromDisplayId === newRel.toDisplayId && r.toDisplayId === newRel.fromDisplayId) ));
+            return [...filtered, newRel];
+        });
+
+        // Broadcast y actividad
+        const pidNumRel = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
+        if (pidNumRel) {
+            try {
+                const minimalRel = {
+                    fromDisplayId: origen.displayId,
+                    toDisplayId: destino.displayId,
+                    type: relationType,
+                    originCard,
+                    destCard,
+                    verb
+                };
+                const payload: DiagramUpdate = { projectId: pidNumRel, userId: Number(localStorage.getItem('userId') || 0), diagramData: { relation: minimalRel }, changeType: 'create_relation', elementId: undefined, timestamp: new Date().toISOString() };
+                try { if (socketService.isConnected() && !socketService.isInProject(pidNumRel)) socketService.joinProject(pidNumRel); } catch {}
+                socketService.sendDiagramUpdate(payload);
+                scheduleAutoSave();
+            } catch {}
+        }
+    };
+
+    // Elimina una relación entre dos clases por nombre (si existe)
+    const deleteSuggestedRelation = (rel: RelationSuggestion) => {
+        if (!graph || !(myRole === 'creador' || myRole === 'editor')) return;
+        const origen = classesRef.current.find(c => c.name.toLowerCase() === rel.originName.toLowerCase());
+        const destino = classesRef.current.find(c => c.name.toLowerCase() === rel.destName.toLowerCase());
+        if (!origen?.element || !destino?.element) return;
+        try {
+            const links = (graph as any).getLinks ? (graph as any).getLinks() : [];
+            const aId = (origen.element as any).id;
+            const bId = (destino.element as any).id;
+            let removed = false;
+            links.forEach((l: any) => {
+                const s = l.get('source'); const t = l.get('target');
+                const sid = s && s.id; const tid = t && t.id;
+                if ((sid === aId && tid === bId) || (sid === bId && tid === aId)) {
+                    suppressLinkEmitRef.current = true; try { l.remove(); removed = true; } catch {} suppressLinkEmitRef.current = false;
+                }
+            });
+            if (removed) {
+                setRelations(prev => prev.filter(r => !((r.fromDisplayId === origen.displayId && r.toDisplayId === destino.displayId) || (r.fromDisplayId === destino.displayId && r.toDisplayId === origen.displayId))));
+                const pid = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
+                if (pid) {
+                    const minimal = { fromDisplayId: origen.displayId, toDisplayId: destino.displayId };
+                    const payload: DiagramUpdate = { projectId: pid, userId: Number(localStorage.getItem('userId') || 0), diagramData: minimal, changeType: 'delete_relation', elementId: undefined, timestamp: new Date().toISOString() };
+                    try { if (socketService.isConnected() && !socketService.isInProject(pid)) socketService.joinProject(pid); } catch {}
+                    socketService.sendDiagramUpdate(payload);
+                    scheduleAutoSave();
+                }
+            }
+        } catch {}
     };
 
     const downloadDiagramAsJSON = (_graph: joint.dia.Graph | null) => {
@@ -2275,6 +2494,52 @@ const ConnectedDiagramPage: React.FC = () => {
         }
     };
 
+    // Nueva: obtener recomendaciones de CLASES/tablas desde IA usando el título del proyecto
+    const fetchClassRecommendations = async () => {
+        if (!(myRole === 'creador' || myRole === 'editor')) return;
+        if (!projectId) return;
+        try {
+            setClassRecoLoading(true);
+            const proj = await projectApi.getProjectById(Number(projectId));
+            const title = proj?.name || 'Proyecto';
+            const existing = classesRef.current.map(c => c.name);
+            const suggestions = await suggestClassesFromProjectTitle(title, existing);
+            // Limpia nombres vacíos o duplicados vs existentes
+            const filtered = (suggestions || []).filter(s => s.name && !existing.includes(s.name));
+            setClassRecoList(filtered);
+        } catch (e) {
+            console.error('Error obteniendo recomendaciones de clases:', e);
+            setClassRecoList([]);
+        } finally {
+            setClassRecoLoading(false);
+        }
+    };
+
+    // Nueva: obtener recomendaciones de RELACIONES entre clases
+    const fetchRelationRecommendations = async () => {
+        if (!(myRole === 'creador' || myRole === 'editor')) return;
+        if (!projectId) return;
+        try {
+            setRelRecoLoading(true);
+            const proj = await projectApi.getProjectById(Number(projectId));
+            const title = proj?.name || 'Proyecto';
+            const names = classesRef.current.map(c => c.name);
+            const rels = await suggestRelationsFromProjectTitle(title, names);
+            // Filtrar relaciones hacia clases realmente existentes y evitar duplicados exactos
+            const key = (r: RelationSuggestion) => `${r.originName}__${r.destName}__${r.relationType || 'asociacion'}__${r.originCard || ''}__${r.destCard || ''}__${r.verb || ''}`;
+            const seen = new Set<string>();
+            const filtered = (rels || []).filter(r => {
+                const k = key(r); if (seen.has(k)) return false; seen.add(k); return true;
+            });
+            setRelRecoList(filtered);
+        } catch (e) {
+            console.error('Error obteniendo recomendaciones de relaciones:', e);
+            setRelRecoList([]);
+        } finally {
+            setRelRecoLoading(false);
+        }
+    };
+
     const applyAttributesToClass = (displayId: number, attrs: Array<{ name: string; type: string }>) => {
         if (!graph) return;
         const cls = classesRef.current.find(c => c.displayId === displayId);
@@ -2285,7 +2550,7 @@ const ConnectedDiagramPage: React.FC = () => {
             ...attrs.map(a => `${a.name}: ${a.type}`)
         ];
         const newMethods = cls.methods;
-        const labelText = toLabelText(cls.name, newAttrsText.map(parseAttrString), newMethods.map(parseMethodString));
+    const labelText = toLabelText(cls.name, newAttrsText.map(parseAttrString));
         const fontSize = 12;
         const paddingX = 20; const paddingY = 30;
         const lines = labelText.split('\n');
@@ -2427,6 +2692,22 @@ const ConnectedDiagramPage: React.FC = () => {
                     <button onClick={() => saveProject(graph)} className="btn btn-block btn-primary" title="Guardar proyecto">
                         💾 Guardar Proyecto
                     </button>
+                    <button
+                        onClick={() => {
+                            if (projectId) {
+                                navigate(`/generate/${projectId}`);
+                            } else {
+                                alert('Primero abre o guarda un proyecto para generar el backend.');
+                            }
+                        }}
+                        className="btn btn-block"
+                        title="Generar Backend (Spring Boot)"
+                        style={{
+                            backgroundColor: '#6db33f',
+                            color: 'white',
+                            border: '1px solid #6db33f'
+                        }}
+                    >🍃 Generar Backend</button>
                 </div>
             </aside>
             )}
@@ -2460,6 +2741,46 @@ const ConnectedDiagramPage: React.FC = () => {
                     <FaRegLightbulb />
                     <span style={{ fontWeight: 700 }}>Recomendaciones</span>
                 </button>
+
+                {/* Toggle para recomendaciones de CLASES/tablas */}
+                <button
+                    onClick={() => { const next = !openClassReco; setOpenClassReco(next); if (next) fetchClassRecommendations(); }}
+                    title={myRole === 'vista' ? 'Solo lectura' : 'Recomendar Clases/Tablas'}
+                    disabled={myRole === 'vista'}
+                    style={{
+                        position: 'absolute',
+                        top: 10,
+                        right: 180,
+                        zIndex: 5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        background: '#e0f2fe',
+                        color: '#075985',
+                        border: '1px solid #38bdf8',
+                        borderRadius: 8,
+                        padding: '6px 10px',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+                        cursor: myRole === 'vista' ? 'not-allowed' : 'pointer'
+                    }}
+                >
+                    <FaPlus />
+                    <span style={{ fontWeight: 700 }}>Clases sugeridas</span>
+                </button>
+
+                {/* Toggle para recomendaciones de RELACIONES */}
+                {/* <button
+                    onClick={() => { const next = !openRelReco; setOpenRelReco(next); if (next) fetchRelationRecommendations(); }}
+                    title={myRole === 'vista' ? 'Solo lectura' : 'Recomendar Relaciones'}
+                    disabled={myRole === 'vista'}
+                    style={{
+                        position: 'absolute', top: 10, right: 380, zIndex: 5, display: 'flex', alignItems: 'center', gap: 8,
+                        background: '#eef2ff', color: '#3730a3', border: '1px solid #6366f1', borderRadius: 8, padding: '6px 10px', boxShadow: '0 2px 6px rgba(0,0,0,0.08)', cursor: myRole === 'vista' ? 'not-allowed' : 'pointer'
+                    }}
+                >
+                    <FaRegLightbulb />
+                    <span style={{ fontWeight: 700 }}>Relaciones sugeridas</span>
+                </button> */}
 
                 {/* Panel lateral de recomendaciones visible */}
                 {openReco && (
@@ -2513,6 +2834,98 @@ const ConnectedDiagramPage: React.FC = () => {
                         </div>
                     </div>
                 )}
+
+                {/* Panel lateral para recomendaciones de clases/tablas */}
+                {openClassReco && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: 54,
+                            right: 380,
+                            width: 360,
+                            maxWidth: '90vw',
+                            height: '70%',
+                            maxHeight: '80vh',
+                            background: '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 10,
+                            boxShadow: '0 6px 18px rgba(0,0,0,0.15)',
+                            zIndex: 5,
+                            display: 'flex',
+                            flexDirection: 'column'
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', background: '#f0f9ff', borderTopLeftRadius: 10, borderTopRightRadius: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <FaPlus style={{ color: '#0284c7' }} />
+                                <strong>Clases sugeridas por IA</strong>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={fetchClassRecommendations} disabled={classRecoLoading} style={{ background: '#0284c7', color: '#fff', border: 0, borderRadius: 6, padding: '6px 10px' }}>{classRecoLoading ? 'Cargando…' : 'Actualizar'}</button>
+                                {/* <button onClick={addAllSuggestedClasses} disabled={classRecoList.length === 0} style={{ background: '#10b981', color: '#fff', border: 0, borderRadius: 6, padding: '6px 10px' }}>Agregar todas</button> */}
+                                <button onClick={() => setOpenClassReco(false)} style={{ border: '1px solid #e5e7eb', background: '#fff', borderRadius: 6, padding: '6px 10px' }}>Cerrar</button>
+                            </div>
+                        </div>
+                        <div style={{ padding: 10, overflow: 'auto' }}>
+                            {classRecoList.length === 0 && !classRecoLoading && (
+                                <p style={{ color: '#6b7280' }}>No hay sugerencias por ahora. Haz clic en "Actualizar" para intentar de nuevo.</p>
+                            )}
+                            {classRecoList.map((sug, idx) => (
+                                <div key={`class-reco-${idx}`} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                                    <div style={{ fontWeight: 700, marginBottom: 6 }}>{sug.name}</div>
+                                    {sug.reason && <div style={{ color: '#6b7280', marginBottom: 6 }}>{sug.reason}</div>}
+                                    {sug.attributes && sug.attributes.length > 0 && (
+                                        <ul style={{ margin: '0 0 8px 18px' }}>
+                                            {sug.attributes.map((a, i2) => (
+                                                <li key={i2}><code>{a.name}: {a.type}</code> {a.reason && <span style={{ color: '#6b7280' }}>– {a.reason}</span>}</li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    <button onClick={() => addSuggestedClass(sug)} style={{ width: '100%', background: '#10b981', color: '#fff', border: 0, borderRadius: 6, padding: '8px 10px' }}>
+                                        Agregar clase
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Panel lateral para recomendaciones de relaciones */}
+                {openRelReco && (
+                    <div
+                        style={{ position: 'absolute', top: 54, right: 750, width: 360, maxWidth: '90vw', height: '70%', maxHeight: '80vh', background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 10, boxShadow: '0 6px 18px rgba(0,0,0,0.15)', zIndex: 5, display: 'flex', flexDirection: 'column' }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', background: '#eef2ff', borderTopLeftRadius: 10, borderTopRightRadius: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <FaRegLightbulb style={{ color: '#6366f1' }} />
+                                <strong>Relaciones sugeridas por IA</strong>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={fetchRelationRecommendations} disabled={relRecoLoading} style={{ background: '#6366f1', color: '#fff', border: 0, borderRadius: 6, padding: '6px 10px' }}>{relRecoLoading ? 'Cargando…' : 'Actualizar'}</button>
+                                <button onClick={() => { relRecoList.forEach(r => applySuggestedRelation(r)); }} disabled={relRecoList.length === 0} style={{ background: '#10b981', color: '#fff', border: 0, borderRadius: 6, padding: '6px 10px' }}>Aplicar todas</button>
+                                <button onClick={() => setOpenRelReco(false)} style={{ border: '1px solid #e5e7eb', background: '#fff', borderRadius: 6, padding: '6px 10px' }}>Cerrar</button>
+                            </div>
+                        </div>
+                        <div style={{ padding: 10, overflow: 'auto' }}>
+                            {relRecoList.length === 0 && !relRecoLoading && (
+                                <p style={{ color: '#6b7280' }}>No hay sugerencias por ahora. Haz clic en "Actualizar" para intentar de nuevo.</p>
+                            )}
+                            {relRecoList.map((rel, idx) => (
+                                <div key={`rel-reco-${idx}`} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                                    <div style={{ fontWeight: 700, marginBottom: 6 }}>{rel.originName} → {rel.destName} ({rel.relationType || 'asociacion'})</div>
+                                    {rel.reason && <div style={{ color: '#6b7280', marginBottom: 6 }}>{rel.reason}</div>}
+                                    {rel.relationType === 'asociacion' && (
+                                        <div style={{ color: '#111', marginBottom: 6 }}>Cardinalidad: {rel.originCard || '1..1'} → {rel.destCard || '1..1'} {rel.verb ? `• ${rel.verb}` : ''}</div>
+                                    )}
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <button onClick={() => applySuggestedRelation(rel)} style={{ background: '#10b981', color: '#fff', border: 0, borderRadius: 6, padding: '8px 10px' }}>Aplicar</button>
+                                        <button onClick={() => deleteSuggestedRelation(rel)} style={{ background: '#ef4444', color: '#fff', border: 0, borderRadius: 6, padding: '8px 10px' }}>Eliminar</button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <div className="zoom-controls">
                     <button
                         className="zoom-btn"
@@ -2535,6 +2948,7 @@ const ConnectedDiagramPage: React.FC = () => {
                         }}
                         title="Zoom +"
                     >+</button>
+                    {/* Botón de Spring Boot movido al sidebar (Archivo / Proyecto) */}
                 </div>
             </div>
 

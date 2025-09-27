@@ -3,7 +3,7 @@ import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognitio
 import { Typography, Paper, Tabs, Tab, IconButton } from "@mui/material";
 import MicIcon from "@mui/icons-material/Mic";
 import StopCircleIcon from "@mui/icons-material/StopCircle";
-import { suggestActionFromText, type ActionSuggestion } from "../ai/openaiClient";
+import { suggestActionsFromText, type ActionSuggestion } from "../ai/openaiClient";
 
 interface AudioRecorderProps {
   onTranscript: (text: string) => void;
@@ -54,16 +54,24 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
 }
 
 const AudioIAPage: React.FC = () => {
-  const [aiResult, setAiResult] = useState<ActionSuggestion | null>(null);
+  const [aiResults, setAiResults] = useState<ActionSuggestion[]>([]);
   const [isCallingAI, setIsCallingAI] = useState(false);
   const [manualPrompt, setManualPrompt] = useState("");
   const [tab, setTab] = useState<'voz' | 'texto'>("voz");
-  const aiResultPretty = useMemo(() => JSON.stringify(aiResult, null, 2), [aiResult]);
+  const aiResultPretty = useMemo(() => JSON.stringify(aiResults, null, 2), [aiResults]);
 
-  const applySuggestion = (s: ActionSuggestion | null) => {
+  const applySuggestion = (s: ActionSuggestion | undefined) => {
     if (!s) return;
     const evt = new CustomEvent<ActionSuggestion>('diagram-ai-action', { detail: s });
     window.dispatchEvent(evt);
+  };
+
+  const applyAll = async (list: ActionSuggestion[]) => {
+    for (const s of list) {
+      applySuggestion(s);
+      // ligera pausa para que el diagrama procese eventos secuenciales
+      await new Promise(r => setTimeout(r, 60));
+    }
   };
 
   return (
@@ -85,8 +93,8 @@ const AudioIAPage: React.FC = () => {
           <AudioRecorder
             onTranscript={async (t) => {
               setIsCallingAI(true);
-              const suggestion = await suggestActionFromText(t);
-              setAiResult(suggestion);
+              const suggestions = await suggestActionsFromText(t);
+              setAiResults(suggestions);
               setIsCallingAI(false);
             }}
           />
@@ -104,8 +112,8 @@ const AudioIAPage: React.FC = () => {
           <button
             onClick={async () => {
               setIsCallingAI(true);
-              const suggestion = await suggestActionFromText(manualPrompt);
-              setAiResult(suggestion);
+              const suggestions = await suggestActionsFromText(manualPrompt);
+              setAiResults(suggestions);
               setIsCallingAI(false);
             }}
             style={{ backgroundColor: '#00d1b2', color: '#fff', padding: '10px 20px', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
@@ -120,11 +128,18 @@ const AudioIAPage: React.FC = () => {
         <pre style={{ color: '#fff', overflowX: 'auto' }}>{aiResultPretty}</pre>
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
           <button
-            onClick={() => applySuggestion(aiResult)}
-            disabled={!aiResult || aiResult.type === 'noop'}
+            onClick={() => applySuggestion(aiResults[0])}
+            disabled={aiResults.length === 0 || aiResults[0]?.type === 'noop'}
             style={{ backgroundColor: '#1abc9c', color: '#fff', padding: '8px 12px', border: 'none', borderRadius: 6, cursor: 'pointer' }}
           >
-            Aplicar al diagrama
+            Aplicar 1º resultado
+          </button>
+          <button
+            onClick={() => applyAll(aiResults)}
+            disabled={aiResults.length === 0}
+            style={{ backgroundColor: '#10b981', color: '#fff', padding: '8px 12px', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+          >
+            Aplicar todos
           </button>
         </div>
       </div>
