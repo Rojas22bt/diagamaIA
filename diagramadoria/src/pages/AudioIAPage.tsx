@@ -12,11 +12,21 @@ interface AudioRecorderProps {
 function AudioRecorder({ onTranscript }: AudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const { transcript, resetTranscript } = useSpeechRecognition();
+  const supportsSR = SpeechRecognition.browserSupportsSpeechRecognition();
+  const isSecure = typeof window !== 'undefined' ? window.isSecureContext : true;
 
-  const startRecording = () => {
+  const startRecording = async () => {
+    try {
+      // Solicitar permiso de micrófono explícito en un gesto del usuario
+      await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+      console.warn("Permiso de micrófono denegado o no disponible:", err);
+      alert("No se pudo acceder al micrófono. Verifica permisos del navegador y que el sitio esté en HTTPS.");
+      return;
+    }
     setIsRecording(true);
     resetTranscript();
-  SpeechRecognition.startListening({ continuous: true, language: "es-ES" });
+    SpeechRecognition.startListening({ continuous: true, language: "es-ES" });
   };
 
   const stopRecording = () => {
@@ -37,13 +47,18 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
           size="small"
           aria-label={isRecording ? "Detener grabación" : "Iniciar grabación"}
           onClick={isRecording ? stopRecording : startRecording}
+          disabled={!supportsSR || !isSecure}
         >
           {isRecording ? <StopCircleIcon /> : <MicIcon />}
         </IconButton>
       </div>
       <div className={`ai-voice ${isRecording ? 'recording' : ''}`}>
         <Typography variant="body2" color={isRecording ? "error" : "textSecondary"}>
-          {isRecording ? "Grabando... (haz clic para detener)" : "Haz clic en el micrófono para empezar"}
+          {!supportsSR
+            ? "Tu navegador no soporta Web Speech API. Prueba Chrome en escritorio."
+            : !isSecure
+              ? "El micrófono requiere HTTPS. Abre el sitio con https://"
+              : (isRecording ? "Grabando... (haz clic para detener)" : "Haz clic en el micrófono para empezar")}
         </Typography>
         <div className="ai-scrollbox" title={transcript}>
           {transcript || (isRecording ? "Hablando..." : "Transcripción de audio aquí")}

@@ -4,5 +4,9 @@
     "exclude": [
       "/api/*"
     ]
+  },
+  "globalHeaders": {
+    "Permissions-Policy": "microphone=(self)",
+    "Feature-Policy": "microphone 'self'"
   }
 }
