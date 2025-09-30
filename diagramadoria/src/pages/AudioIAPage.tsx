@@ -1,9 +1,9 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 import { Typography, Paper, Tabs, Tab, IconButton } from "@mui/material";
 import MicIcon from "@mui/icons-material/Mic";
 import StopCircleIcon from "@mui/icons-material/StopCircle";
-import { suggestActionsFromText, type ActionSuggestion, transcribeAudio } from "../ai/openaiClient";
+import { suggestActionsFromText, type ActionSuggestion } from "../ai/openaiClient";
 
 interface AudioRecorderProps {
   onTranscript: (text: string) => void;
@@ -14,16 +14,11 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
   const { transcript, resetTranscript } = useSpeechRecognition();
   const supportsSR = SpeechRecognition.browserSupportsSpeechRecognition();
   const isSecure = typeof window !== 'undefined' ? window.isSecureContext : true;
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<BlobPart[]>([]);
-  const [mode, setMode] = useState<'continuous'|'burst5s'>('burst5s');
 
   const startRecording = async () => {
     try {
       // Solicitar permiso de micrófono explícito en un gesto del usuario
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
+      await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
       console.warn("Permiso de micrófono denegado o no disponible:", err);
       alert("No se pudo acceder al micrófono. Verifica permisos del navegador y que el sitio esté en HTTPS.");
@@ -31,56 +26,15 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
     }
     setIsRecording(true);
     resetTranscript();
-    if (mode === 'continuous') {
-      SpeechRecognition.startListening({ continuous: true, language: "es-ES" });
-    } else {
-      // burst 5s con MediaRecorder
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm';
-      const rec = new MediaRecorder(mediaStreamRef.current!, { mimeType });
-      chunksRef.current = [];
-      rec.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data); };
-      rec.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        // transcribir y enviar
-        const text = await transcribeAudio(blob, { language: 'es', translate: false });
-        if (text) onTranscript(text);
-        // liberar recursos
-        if (mediaStreamRef.current) {
-          mediaStreamRef.current.getTracks().forEach(t => t.stop());
-          mediaStreamRef.current = null;
-        }
-        recorderRef.current = null;
-        setIsRecording(false);
-      };
-      recorderRef.current = rec;
-      rec.start();
-      // detener a los ~5s
-      setTimeout(() => {
-        if (recorderRef.current && recorderRef.current.state === 'recording') {
-          recorderRef.current.stop();
-        }
-      }, 5100);
-    }
+    SpeechRecognition.startListening({ continuous: true, language: "es-ES" });
   };
 
   const stopRecording = () => {
     setIsRecording(false);
-    if (mode === 'continuous') {
-      SpeechRecognition.stopListening();
-      if (transcript) {
-        onTranscript(transcript);
-        resetTranscript();
-      }
-    } else {
-      if (recorderRef.current && recorderRef.current.state === 'recording') {
-        recorderRef.current.stop();
-      }
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach(t => t.stop());
-        mediaStreamRef.current = null;
-      }
+    SpeechRecognition.stopListening();
+    if (transcript) {
+      onTranscript(transcript);
+      resetTranscript();
     }
   };
 
@@ -100,7 +54,7 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
       </div>
       <div className={`ai-voice ${isRecording ? 'recording' : ''}`}>
         <Typography variant="body2" color={isRecording ? "error" : "textSecondary"}>
-          {!supportsSR && mode === 'continuous'
+          {!supportsSR
             ? "Tu navegador no soporta Web Speech API. Prueba Chrome en escritorio."
             : !isSecure
               ? "El micrófono requiere HTTPS. Abre el sitio con https://"
@@ -109,10 +63,6 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
         <div className="ai-scrollbox" title={transcript}>
           {transcript || (isRecording ? "Hablando..." : "Transcripción de audio aquí")}
         </div>
-      </div>
-      <div style={{ display:'flex', gap:8, marginTop:8 }}>
-        <button onClick={() => setMode('burst5s')} disabled={mode==='burst5s'}>Modo 5s</button>
-        <button onClick={() => setMode('continuous')} disabled={mode==='continuous'}>Modo continuo</button>
       </div>
     </Paper>
   );

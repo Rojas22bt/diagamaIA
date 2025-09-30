@@ -39,6 +39,18 @@ export default tseslint.config([
 ])
 ```
 
+## Chat Bot y IA
+
+- Nueva ruta: `/chatbot` y pestaña en el Navbar (Chat Bot) para conversar en español.
+- El bot responde de dos formas: pasos MANUALES para hacer la acción en el diagrama y una sugerencia con IA basada en OpenAI.
+- Para habilitar IA, define la variable de entorno Vite:
+
+```
+VITE_OPENAI_API_KEY=sk-...tu_clave...
+```
+
+Nota: En este proyecto el cliente de OpenAI se usa desde el navegador. Para producción se recomienda pasar por un backend propio y no exponer la API key en el cliente.
+
 You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
 ```js

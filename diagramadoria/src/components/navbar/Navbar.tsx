@@ -19,6 +19,10 @@ const Navbar = () => {
         navigate('/invitations');
     };
 
+    const handleChatBotClick = () => {
+        navigate('/chatbot');
+    };
+
     const handleLogout = () => {
         dispatch(logout());
         navigate('/login');
@@ -36,6 +40,7 @@ const Navbar = () => {
                 <ul className="navbar-menu">
                     <li><button onClick={handleProjectsClick}>Proyectos</button></li>
                     <li><button onClick={handleInvitationsClick}>Invitaciones</button></li>
+                    <li><button onClick={handleChatBotClick}>Chat Bot</button></li>
                     <li><button onClick={handleLogout}>Logout</button></li>
                 </ul>
             </div>

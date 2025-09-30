@@ -171,40 +171,302 @@ const getExampleValue = (type: string): string => {
 };
 
 /* ==============================
+ * Procesamiento de Relaciones
+ * ============================== */
+
+// Tipo para describir una relación procesada
+type ProcessedRelation = {
+  ownerId: number; // displayId de la entidad que contiene la FK o hereda
+  relatedId: number; // displayId de la entidad relacionada o padre
+  ownerClassName: string; // nombre de la clase que contiene la FK o hereda
+  relatedClassName: string; // nombre de la clase relacionada o padre
+  fieldName: string; // nombre del campo de relación
+  type: 'ManyToOne' | 'OneToMany' | 'OneToOne' | 'ManyToMany' | 'Inheritance';
+  isOwner: boolean; // si esta entidad es la propietaria de la relación
+  inverse?: string; // nombre del campo inverso (para OneToMany)
+  umlType: UMLRelationType; // tipo original UML
+  cascadeType: 'ALL' | 'PERSIST_MERGE' | 'NONE';
+  orphanRemoval: boolean;
+};
+
+// Determina el tipo de relación JPA basándose en el tipo UML y las cardinalidades
+const getJPARelationType = (
+  relationType: UMLRelationType, 
+  originCard: string, 
+  destCard: string
+): {
+  fromSide: 'ManyToOne' | 'OneToMany' | 'OneToOne' | 'ManyToMany' | 'Inheritance' | null;
+  toSide: 'ManyToOne' | 'OneToMany' | 'OneToOne' | 'ManyToMany' | 'Inheritance' | null;
+  cascadeType: 'ALL' | 'PERSIST_MERGE' | 'NONE';
+  orphanRemoval: boolean;
+} => {
+  // HERENCIA: Relación especial - no genera FK sino jerarquía de clases
+  if (relationType === 'herencia') {
+    return { 
+      fromSide: null, // La clase hijo no tiene campo hacia el padre
+      toSide: 'Inheritance', // La clase padre puede tener discriminador
+      cascadeType: 'NONE',
+      orphanRemoval: false
+    };
+  }
+
+  // Para asociación, agregación y composición, determinamos cardinalidad
+  const isOriginMany = originCard === '*' || originCard?.includes('*');
+  const isDestMany = destCard === '*' || destCard?.includes('*');
+
+  let cascadeType: 'ALL' | 'PERSIST_MERGE' | 'NONE' = 'NONE';
+  let orphanRemoval = false;
+
+  // COMPOSICIÓN: Relación fuerte - ciclo de vida dependiente
+  if (relationType === 'composicion') {
+    cascadeType = 'ALL';
+    orphanRemoval = true;
+  }
+  // AGREGACIÓN: Relación débil - comparte referencias
+  else if (relationType === 'agregacion') {
+    cascadeType = 'PERSIST_MERGE';
+    orphanRemoval = false;
+  }
+  // ASOCIACIÓN: Relación neutral
+  else if (relationType === 'asociacion') {
+    cascadeType = 'NONE';
+    orphanRemoval = false;
+  }
+
+  // Determinar cardinalidades
+  if (!isOriginMany && !isDestMany) {
+    // 1 to 1
+    return { 
+      fromSide: 'OneToOne', 
+      toSide: 'OneToOne',
+      cascadeType,
+      orphanRemoval
+    };
+  } else if (!isOriginMany && isDestMany) {
+    // 1 to Many: desde perspectiva del 1 es OneToMany, desde perspectiva del * es ManyToOne
+    return { 
+      fromSide: 'OneToMany', 
+      toSide: 'ManyToOne',
+      cascadeType,
+      orphanRemoval
+    };
+  } else if (isOriginMany && !isDestMany) {
+    // Many to 1: desde perspectiva del * es ManyToOne, desde perspectiva del 1 es OneToMany
+    return { 
+      fromSide: 'ManyToOne', 
+      toSide: 'OneToMany',
+      cascadeType,
+      orphanRemoval
+    };
+  } else {
+    // Many to Many
+    return { 
+      fromSide: 'ManyToMany', 
+      toSide: 'ManyToMany',
+      cascadeType,
+      orphanRemoval
+    };
+  }
+};
+
+// Procesa todas las relaciones del diagrama
+const processRelations = (relations: UMLRelation[], classes: UMLClassNode[]): ProcessedRelation[] => {
+  const processed: ProcessedRelation[] = [];
+  
+  relations.forEach(relation => {
+    const fromClass = classes.find(c => c.displayId === relation.fromDisplayId);
+    const toClass = classes.find(c => c.displayId === relation.toDisplayId);
+    
+    if (!fromClass || !toClass) return;
+    
+    const fromClassName = sanitizeIdentifier(fromClass.name);
+    const toClassName = sanitizeIdentifier(toClass.name);
+    
+    const { fromSide, toSide, cascadeType, orphanRemoval } = getJPARelationType(
+      relation.type,
+      relation.originCard || '1', 
+      relation.destCard || '1'
+    );
+    
+    // HERENCIA: Caso especial
+    if (relation.type === 'herencia') {
+      // En herencia, fromClass hereda de toClass
+      processed.push({
+        ownerId: relation.fromDisplayId,
+        relatedId: relation.toDisplayId,
+        ownerClassName: fromClassName,
+        relatedClassName: toClassName,
+        fieldName: 'parent', // No se usa realmente en herencia
+        type: 'Inheritance',
+        isOwner: true,
+        umlType: relation.type,
+        cascadeType,
+        orphanRemoval
+      });
+      return; // No procesamos más para herencia
+    }
+    
+    // RELACIONES NORMALES (Asociación, Agregación, Composición)
+    if (fromSide === 'OneToMany' && toSide === 'ManyToOne') {
+      // 1 to Many: el lado Many (to) tiene la FK
+      processed.push({
+        ownerId: relation.toDisplayId,
+        relatedId: relation.fromDisplayId,
+        ownerClassName: toClassName,
+        relatedClassName: fromClassName,
+        fieldName: fromClassName.charAt(0).toLowerCase() + fromClassName.slice(1),
+        type: 'ManyToOne',
+        isOwner: true,
+        umlType: relation.type,
+        cascadeType,
+        orphanRemoval
+      });
+      
+      // El lado One tiene la relación inversa
+      processed.push({
+        ownerId: relation.fromDisplayId,
+        relatedId: relation.toDisplayId,
+        ownerClassName: fromClassName,
+        relatedClassName: toClassName,
+        fieldName: toClassName.charAt(0).toLowerCase() + toClassName.slice(1) + 's',
+        type: 'OneToMany',
+        isOwner: false,
+        inverse: fromClassName.charAt(0).toLowerCase() + fromClassName.slice(1),
+        umlType: relation.type,
+        cascadeType,
+        orphanRemoval
+      });
+    } else if (fromSide === 'ManyToOne' && toSide === 'OneToMany') {
+      // Many to 1: el lado Many (from) tiene la FK
+      processed.push({
+        ownerId: relation.fromDisplayId,
+        relatedId: relation.toDisplayId,
+        ownerClassName: fromClassName,
+        relatedClassName: toClassName,
+        fieldName: toClassName.charAt(0).toLowerCase() + toClassName.slice(1),
+        type: 'ManyToOne',
+        isOwner: true,
+        umlType: relation.type,
+        cascadeType,
+        orphanRemoval
+      });
+      
+      // El lado One tiene la relación inversa
+      processed.push({
+        ownerId: relation.toDisplayId,
+        relatedId: relation.fromDisplayId,
+        ownerClassName: toClassName,
+        relatedClassName: fromClassName,
+        fieldName: fromClassName.charAt(0).toLowerCase() + fromClassName.slice(1) + 's',
+        type: 'OneToMany',
+        isOwner: false,
+        inverse: toClassName.charAt(0).toLowerCase() + toClassName.slice(1),
+        umlType: relation.type,
+        cascadeType,
+        orphanRemoval
+      });
+    } else if (fromSide === 'OneToOne' && toSide === 'OneToOne') {
+      // OneToOne: elegimos que el lado "to" sea el propietario
+      processed.push({
+        ownerId: relation.toDisplayId,
+        relatedId: relation.fromDisplayId,
+        ownerClassName: toClassName,
+        relatedClassName: fromClassName,
+        fieldName: fromClassName.charAt(0).toLowerCase() + fromClassName.slice(1),
+        type: 'OneToOne',
+        isOwner: true,
+        umlType: relation.type,
+        cascadeType,
+        orphanRemoval
+      });
+      
+      processed.push({
+        ownerId: relation.fromDisplayId,
+        relatedId: relation.toDisplayId,
+        ownerClassName: fromClassName,
+        relatedClassName: toClassName,
+        fieldName: toClassName.charAt(0).toLowerCase() + toClassName.slice(1),
+        type: 'OneToOne',
+        isOwner: false,
+        inverse: fromClassName.charAt(0).toLowerCase() + fromClassName.slice(1),
+        umlType: relation.type,
+        cascadeType,
+        orphanRemoval
+      });
+    } else if (fromSide === 'ManyToMany' && toSide === 'ManyToMany') {
+      // ManyToMany: el lado "from" es el propietario por convención
+      processed.push({
+        ownerId: relation.fromDisplayId,
+        relatedId: relation.toDisplayId,
+        ownerClassName: fromClassName,
+        relatedClassName: toClassName,
+        fieldName: toClassName.charAt(0).toLowerCase() + toClassName.slice(1) + 's',
+        type: 'ManyToMany',
+        isOwner: true,
+        umlType: relation.type,
+        cascadeType,
+        orphanRemoval
+      });
+      
+      processed.push({
+        ownerId: relation.toDisplayId,
+        relatedId: relation.fromDisplayId,
+        ownerClassName: toClassName,
+        relatedClassName: fromClassName,
+        fieldName: fromClassName.charAt(0).toLowerCase() + fromClassName.slice(1) + 's',
+        type: 'ManyToMany',
+        isOwner: false,
+        inverse: toClassName.charAt(0).toLowerCase() + toClassName.slice(1) + 's',
+        umlType: relation.type,
+        cascadeType,
+        orphanRemoval
+      });
+    }
+  });
+  
+  return processed;
+};
+
+/* ==============================
  * Anotaciones JPA + Validación
  * ============================== */
 const getJPAAnnotations = (umlType: string, originalFieldName: string): string[] => {
   const annotations: string[] = [];
   const lowerType = (umlType || '').toLowerCase();
-  const lowerField = originalFieldName.toLowerCase();
+  const colName = toFieldName(originalFieldName); // usar nombre saneado para la columna
 
   const add = (a: string) => annotations.push(a);
 
-  if (lowerField.includes('name') || lowerField.includes('title')) {
-    add(`@Column(name = "${lowerField}", nullable = false, length = 100)`);
+  if (colName.includes('name') || colName.includes('title')) {
+    add(`@Column(name = "${colName}", nullable = false, length = 100)`);
     add(`@NotBlank(message = "${originalFieldName} is required")`);
     add(`@Size(min = 2, max = 100, message = "${originalFieldName} must be between 2 and 100 characters")`);
-  } else if (lowerField.includes('description') || lowerType.includes('text')) {
-    add(`@Column(name = "${lowerField}", columnDefinition = "TEXT")`);
+  } else if (colName.includes('description') || lowerType.includes('text')) {
+    add(`@Column(name = "${colName}", columnDefinition = "TEXT")`);
     add(`@Size(max = 1000, message = "Description must not exceed 1000 characters")`);
-  } else if (lowerField.includes('email')) {
-    add(`@Column(name = "${lowerField}", unique = true, nullable = false)`);
+  } else if (colName.includes('email')) {
+    add(`@Column(name = "${colName}", unique = true, nullable = false)`);
     add(`@NotBlank(message = "Email is required")`);
     add(`@Email(message = "Email should be valid")`);
-  } else if (lowerField.includes('phone')) {
-    add(`@Column(name = "${lowerField}")`);
+  } else if (colName.includes('phone')) {
+    add(`@Column(name = "${colName}")`);
     add(`@Pattern(regexp = "^[\\+]?[1-9]?\\d{9,15}$", message = "Phone number is invalid")`);
   } else if (lowerType.includes('string')) {
-    add(`@Column(name = "${lowerField}")`);
+    add(`@Column(name = "${colName}")`);
     add(`@Size(max = 255, message = "Field must not exceed 255 characters")`);
   } else if (['int', 'integer', 'long'].some(k => lowerType.includes(k))) {
-    add(`@Column(name = "${lowerField}")`);
+    add(`@Column(name = "${colName}")`);
     add(`@Min(value = 0, message = "Value must be positive")`);
-  } else if (['decimal', 'double', 'float', 'bigdecimal'].some(k => lowerType.includes(k))) {
-    add(`@Column(name = "${lowerField}", precision = 10, scale = 2)`);
+  } else if (['decimal', 'bigdecimal'].some(k => lowerType.includes(k))) {
+    // Para BigDecimal sí aplica precision/scale
+    add(`@Column(name = "${colName}", precision = 10, scale = 2)`);
+    add(`@DecimalMin(value = "0.0", message = "Value must be positive")`);
+  } else if (['double', 'float'].some(k => lowerType.includes(k))) {
+    // Para double/float NO usar scale
+    add(`@Column(name = "${colName}")`);
     add(`@DecimalMin(value = "0.0", message = "Value must be positive")`);
   } else {
-    add(`@Column(name = "${lowerField}")`);
+    add(`@Column(name = "${colName}")`);
   }
 
   add(`@Schema(description = "${originalFieldName}", example = "${getExampleValue(lowerType)}")`);
@@ -266,10 +528,22 @@ const GenerationBackendSpringBoot: React.FC = () => {
         if (['Integer', 'Long'].includes(javaType)) v = '1';
         else if (javaType === 'Boolean') v = 'true';
         else if (javaType === 'BigDecimal') v = '10.50';
-        else if (javaType === 'LocalDate') v = '2025-01-01';
-        else if (javaType === 'LocalDateTime') v = '2025-01-01T10:00:00';
+        else if (javaType === 'LocalDate') v = '"2025-01-01"';
+        else if (javaType === 'LocalDateTime') v = '"2025-01-01T10:00:00"';
         lines.push(`  "${toFieldName(attr.name)}": ${v}`);
       });
+
+    // Agregar campos de relaciones ManyToOne y OneToOne (IDs de referencias)
+    const processedRelations = processRelations(diagramModel.relations, diagramModel.classes);
+    const entityRelations = processedRelations.filter(rel => 
+      rel.ownerId === classNode.displayId && 
+      (rel.type === 'ManyToOne' || (rel.type === 'OneToOne' && rel.isOwner))
+    );
+    
+    entityRelations.forEach(rel => {
+      lines.push(`  "${rel.fieldName}Id": 1`);
+    });
+
     return `{
 ${lines.join(',\n')}
 }`;
@@ -277,9 +551,31 @@ ${lines.join(',\n')}
 
   const generateDto = (c: UMLClassNode): string => {
     const className = sanitizeIdentifier(c.name);
+
+    // Procesar relaciones para esta entidad
+    const processedRelations = processRelations(diagramModel.relations, diagramModel.classes);
+    const entityRelations = processedRelations.filter(rel => rel.ownerId === c.displayId);
+
+    const attrJavaTypes = c.attributes.map(a => mapUMLTypeToJava(a.type));
+    const needsLocalDate = attrJavaTypes.includes('LocalDate');
+    const needsLocalDateTime = attrJavaTypes.includes('LocalDateTime');
+    const needsBigDecimal = attrJavaTypes.includes('BigDecimal');
+
+    const imports: string[] = ['import lombok.Data;'];
+    if (needsLocalDate || needsLocalDateTime) imports.push('import java.time.*;');
+    if (needsBigDecimal) imports.push('import java.math.BigDecimal;');
+    
+    // Agregar imports para colecciones si hay relaciones OneToMany o ManyToMany
+    const hasCollections = entityRelations.some(rel => 
+      rel.type === 'OneToMany' || rel.type === 'ManyToMany'
+    );
+    if (hasCollections) {
+      imports.push('import java.util.Set;');
+    }
+
     let code = `package ${config.packageName}.dto;
 
-import lombok.Data;
+${imports.join('\n')}
 
 @Data
 public class ${className}Dto {
@@ -292,6 +588,21 @@ public class ${className}Dto {
         const fieldName = toFieldName(attr.name);
         code += `    private ${javaType} ${fieldName};\n`;
       });
+
+    // Agregar campos de relación en DTOs
+    entityRelations.forEach(rel => {
+      if (rel.type === 'ManyToOne' || (rel.type === 'OneToOne' && rel.isOwner)) {
+        // Para relaciones que esta entidad "posee", agregamos solo el ID
+        code += `    private Long ${rel.fieldName}Id;\n`;
+      } else if (rel.type === 'OneToMany' || rel.type === 'ManyToMany') {
+        // Para colecciones, agregamos solo los IDs por simplicidad en DTOs
+        code += `    private Set<Long> ${rel.fieldName}Ids;\n`;
+      } else if (rel.type === 'OneToOne' && !rel.isOwner) {
+        // Para OneToOne donde no somos propietarios, también solo el ID
+        code += `    private Long ${rel.fieldName}Id;\n`;
+      }
+    });
+
     code += `}
 `;
     return code;
@@ -303,6 +614,18 @@ public class ${className}Dto {
   const generateEntity = (c: UMLClassNode): string => {
     const className = sanitizeIdentifier(c.name);
     const tableName = sanitizeTableName(className);
+
+    // Procesar relaciones para esta entidad
+    const processedRelations = processRelations(diagramModel.relations, diagramModel.classes);
+    const entityRelations = processedRelations.filter(rel => rel.ownerId === c.displayId);
+    
+    // Verificar si esta entidad hereda de otra (hijo en herencia)
+    const inheritanceRelation = entityRelations.find(rel => rel.type === 'Inheritance');
+    
+    // Verificar si esta entidad es padre en alguna herencia
+    const isParentInInheritance = processedRelations.some(rel => 
+      rel.type === 'Inheritance' && rel.relatedId === c.displayId
+    );
 
     const attrJavaTypes = c.attributes.map(a => mapUMLTypeToJava(a.type));
     const needsLocalDate = attrJavaTypes.includes('LocalDate');
@@ -329,13 +652,54 @@ public class ${className}Dto {
     if (needsBigDecimal) imports.push('import java.math.BigDecimal;');
     if (usesValidation) imports.push('import jakarta.validation.constraints.*;');
     if (usesSchema) imports.push('import io.swagger.v3.oas.annotations.media.Schema;');
+    
+    // Agregar imports para relaciones si existen
+    if (entityRelations.length > 0) {
+      const needsSet = entityRelations.some(rel => 
+        rel.type === 'OneToMany' || rel.type === 'ManyToMany'
+      );
+      if (needsSet) {
+        imports.push('import java.util.Set;');
+        imports.push('import java.util.HashSet;');
+      }
+      
+      // Imports para las clases relacionadas
+      entityRelations.forEach(rel => {
+        if (rel.relatedClassName !== className) {
+          // Evitar imports de la misma clase, pero agregar para otras
+          imports.push(`import ${config.packageName}.entity.${rel.relatedClassName};`);
+        }
+      });
+    }
 
     let code = `package ${config.packageName}.entity;
 
 ${imports.join('\n')}
 
 @Data
-@Entity
+@Entity`;
+
+    // Configurar herencia JPA
+    if (inheritanceRelation) {
+      // Esta clase hereda de otra
+      code += `\npublic class ${className} extends ${inheritanceRelation.relatedClassName} {\n`;
+      // No necesita @Id porque lo hereda del padre
+    } else if (isParentInInheritance) {
+      // Esta clase es padre en una jerarquía de herencia
+      code += `
+@Inheritance(strategy = InheritanceType.JOINED)
+@DiscriminatorColumn(name = "type", discriminatorType = DiscriminatorType.STRING)
+@DiscriminatorValue("${className.toUpperCase()}")
+@Table(name = "${tableName}")
+public class ${className} {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+`;
+    } else {
+      // Clase normal sin herencia
+      code += `
 @Table(name = "${tableName}")
 @NoArgsConstructor
 @AllArgsConstructor
@@ -345,6 +709,7 @@ public class ${className} {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 `;
+    }
 
     c.attributes
       .filter(a => toFieldName(a.name) !== 'id')
@@ -354,6 +719,79 @@ public class ${className} {
         const fieldName = toFieldName(attr.name);
         anns.forEach(a => (code += `    ${a}\n`));
         code += `    private ${javaType} ${fieldName};\n\n`;
+      });
+
+    // Agregar campos de relaciones (solo para relaciones no-herencia)
+    entityRelations
+      .filter(rel => rel.type !== 'Inheritance')
+      .forEach(rel => {
+        const relFieldType = rel.type === 'OneToMany' || rel.type === 'ManyToMany' 
+          ? `Set<${rel.relatedClassName}>` 
+          : rel.relatedClassName;
+        
+        // Determinar tipo de cascade basado en el tipo UML
+        const getCascadeType = (cascadeType: string): string => {
+          switch (cascadeType) {
+            case 'ALL': return 'CascadeType.ALL';
+            case 'PERSIST_MERGE': return '{CascadeType.PERSIST, CascadeType.MERGE}';
+            default: return '';
+          }
+        };
+        
+        const cascadeStr = getCascadeType(rel.cascadeType);
+        const orphanStr = rel.orphanRemoval ? ', orphanRemoval = true' : '';
+        
+        // Comentario explicativo según tipo UML
+        const relationComment: Record<UMLRelationType, string> = {
+          'composicion': '// COMPOSICIÓN: Relación fuerte con control de ciclo de vida',
+          'agregacion': '// AGREGACIÓN: Relación débil, objetos pueden existir independientemente',
+          'asociacion': '// ASOCIACIÓN: Relación simple de referencia',
+          'herencia': '// HERENCIA: No aplica aquí'
+        };
+        
+        code += `    ${relationComment[rel.umlType]}\n`;
+        
+        // Generar anotaciones de relación con cascade específico
+        if (rel.type === 'ManyToOne') {
+          const cascadePart = cascadeStr ? `, cascade = ${cascadeStr}` : '';
+          code += `    @ManyToOne(fetch = FetchType.LAZY${cascadePart})\n`;
+          code += `    @JoinColumn(name = "${rel.fieldName}_id")\n`;
+          code += `    @Schema(description = "${rel.umlType.toUpperCase()}: ${rel.relatedClassName}")\n`;
+        } else if (rel.type === 'OneToMany') {
+          const cascadePart = cascadeStr ? `, cascade = ${cascadeStr}` : '';
+          code += `    @OneToMany(mappedBy = "${rel.inverse}", fetch = FetchType.LAZY${cascadePart}${orphanStr})\n`;
+          code += `    @Schema(description = "${rel.umlType.toUpperCase()}: Lista de ${rel.relatedClassName}s")\n`;
+        } else if (rel.type === 'OneToOne') {
+          const cascadePart = cascadeStr ? `, cascade = ${cascadeStr}` : '';
+          if (rel.isOwner) {
+            code += `    @OneToOne(fetch = FetchType.LAZY${cascadePart}${orphanStr})\n`;
+            code += `    @JoinColumn(name = "${rel.fieldName}_id")\n`;
+          } else {
+            code += `    @OneToOne(mappedBy = "${rel.inverse}", fetch = FetchType.LAZY${cascadePart}${orphanStr})\n`;
+          }
+          code += `    @Schema(description = "${rel.umlType.toUpperCase()}: Relación uno a uno con ${rel.relatedClassName}")\n`;
+        } else if (rel.type === 'ManyToMany') {
+          const cascadePart = cascadeStr ? `, cascade = ${cascadeStr}` : '';
+          if (rel.isOwner) {
+            const joinTableName = `${tableName}_${sanitizeTableName(rel.relatedClassName)}`;
+            code += `    @ManyToMany(fetch = FetchType.LAZY${cascadePart})\n`;
+            code += `    @JoinTable(\n`;
+            code += `        name = "${joinTableName}",\n`;
+            code += `        joinColumns = @JoinColumn(name = "${tableName}_id"),\n`;
+            code += `        inverseJoinColumns = @JoinColumn(name = "${sanitizeTableName(rel.relatedClassName)}_id")\n`;
+            code += `    )\n`;
+          } else {
+            code += `    @ManyToMany(mappedBy = "${rel.inverse}", fetch = FetchType.LAZY)\n`;
+          }
+          code += `    @Schema(description = "${rel.umlType.toUpperCase()}: Relación muchos a muchos con ${rel.relatedClassName}s")\n`;
+        }
+        
+        // Inicialización para colecciones
+        if (rel.type === 'OneToMany' || rel.type === 'ManyToMany') {
+          code += `    private ${relFieldType} ${rel.fieldName} = new HashSet<>();\n\n`;
+        } else {
+          code += `    private ${relFieldType} ${rel.fieldName};\n\n`;
+        }
       });
 
     code += `}
@@ -448,6 +886,10 @@ ${searchLines ? searchLines + '\n' : ''}}
     const name = sanitizeIdentifier(c.name);
     const varName = name.charAt(0).toLowerCase() + name.slice(1);
 
+    // Procesar relaciones para esta entidad
+    const processedRelations = processRelations(diagramModel.relations, diagramModel.classes);
+    const entityRelations = processedRelations.filter(rel => rel.ownerId === c.displayId);
+
     const searchable = generateSearchMethods
       ? c.attributes.filter(a => {
           const javaType = mapUMLTypeToJava(a.type);
@@ -467,6 +909,19 @@ ${searchLines ? searchLines + '\n' : ''}}
       })
       .join('\n');
 
+    // Agregar setters de relaciones para toDto
+    const relationDtoSetters = entityRelations.map(rel => {
+      const fieldCap = toPropertyCap(rel.fieldName);
+      if (rel.type === 'ManyToOne' || (rel.type === 'OneToOne' && rel.isOwner)) {
+        return `        dto.set${fieldCap}Id(e.get${fieldCap}() != null ? e.get${fieldCap}().getId() : null);`;
+      } else if (rel.type === 'OneToMany' || rel.type === 'ManyToMany') {
+        return `        dto.set${fieldCap}Ids(e.get${fieldCap}() != null ? e.get${fieldCap}().stream().map(item -> item.getId()).collect(java.util.stream.Collectors.toSet()) : new java.util.HashSet<>());`;
+      } else if (rel.type === 'OneToOne' && !rel.isOwner) {
+        return `        dto.set${fieldCap}Id(e.get${fieldCap}() != null ? e.get${fieldCap}().getId() : null);`;
+      }
+      return '';
+    }).filter(s => s).join('\n');
+
     const entitySetters = c.attributes
       .filter(a => toFieldName(a.name) !== 'id')
       .map(a => {
@@ -476,13 +931,40 @@ ${searchLines ? searchLines + '\n' : ''}}
       })
       .join('\n');
 
+    // Para toEntity, solo establecemos las relaciones ManyToOne y OneToOne owner
+    // Las relaciones OneToMany y ManyToMany se manejan por separado
+    const relationEntitySetters = entityRelations
+      .filter(rel => rel.type === 'ManyToOne' || (rel.type === 'OneToOne' && rel.isOwner))
+      .map(rel => {
+        const fieldCap = toPropertyCap(rel.fieldName);
+        const relatedRepoVar = rel.relatedClassName.charAt(0).toLowerCase() + rel.relatedClassName.slice(1) + 'Repository';
+        return `        if (dto.get${fieldCap}Id() != null) {
+            e.set${fieldCap}(${relatedRepoVar}.findById(dto.get${fieldCap}Id()).orElse(null));
+        }`;
+      }).join('\n');
+
     const searchImpl = searchable
       .map(a => {
         const fieldName = toFieldName(a.name);
         const cap = toPropertyCap(fieldName);
-        return `    @Override public java.util.List<${name}Dto> searchBy${cap}(String ${fieldName}) {\n        return ${varName}Repository.findBy${cap}ContainingIgnoreCase(${fieldName}).stream().map(this::toDto).toList();\n    }`;
+        return `    @Override public java.util.List<${name}Dto> searchBy${cap}(String ${fieldName}) {\n        return ${varName}Repository.findBy${cap}ContainingIgnoreCase(${fieldName}).stream().map(this::toDto).collect(java.util.stream.Collectors.toList());\n    }`;
       })
       .join('\n\n');
+
+    // Generar imports para repositorios de entidades relacionadas
+    const relatedRepositoryImports = entityRelations
+      .filter(rel => rel.type === 'ManyToOne' || (rel.type === 'OneToOne' && rel.isOwner))
+      .map(rel => `import ${config.packageName}.repository.${rel.relatedClassName}Repository;`)
+      .join('\n');
+
+    // Generar inyecciones de repositorios relacionados
+    const relatedRepositoryFields = entityRelations
+      .filter(rel => rel.type === 'ManyToOne' || (rel.type === 'OneToOne' && rel.isOwner))
+      .map(rel => {
+        const repoVar = rel.relatedClassName.charAt(0).toLowerCase() + rel.relatedClassName.slice(1) + 'Repository';
+        return `    private final ${rel.relatedClassName}Repository ${repoVar};`;
+      })
+      .join('\n');
 
     return `package ${config.packageName}.service.impl;
 
@@ -490,10 +972,12 @@ import ${config.packageName}.service.${name}Service;
 import ${config.packageName}.repository.${name}Repository;
 import ${config.packageName}.entity.${name};
 import ${config.packageName}.dto.${name}Dto;
+${relatedRepositoryImports}
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -501,12 +985,14 @@ import java.util.*;
 public class ${name}ServiceImpl implements ${name}Service {
 
     private final ${name}Repository ${varName}Repository;
+${relatedRepositoryFields}
 
     private ${name}Dto toDto(${name} e) {
         if (e == null) return null;
         ${name}Dto dto = new ${name}Dto();
         dto.setId(e.getId());
 ${dtoSetters}
+${relationDtoSetters}
         return dto;
     }
 
@@ -514,6 +1000,7 @@ ${dtoSetters}
         ${name} e = new ${name}();
         e.setId(dto.getId());
 ${entitySetters}
+${relationEntitySetters}
         return e;
     }
 
@@ -535,7 +1022,7 @@ ${entitySetters}
         return toDto(${varName}Repository.findByIdWithDetails(id).orElseThrow(() -> new RuntimeException("${name} not found")));
     }
     @Override public java.util.List<${name}Dto> findAll() {
-        return ${varName}Repository.findAll().stream().map(this::toDto).toList();
+        return ${varName}Repository.findAll().stream().map(this::toDto).collect(Collectors.toList());
     }
 ${searchImpl ? '\n' + searchImpl + '\n' : ''}
 }
@@ -621,7 +1108,7 @@ ${searchMethods}}
   };
 
   /* ==============================
-   * Config / infra (sin cambios fuertes)
+   * Config / infra
    * ============================== */
   const generateCorsConfig = (): string => `package ${config.packageName}.config;
 
@@ -713,6 +1200,39 @@ volumes:
           `### ${c.name}\nEndpoint base: /api/${sanitizeTableName(c.name)}s`
       )
       .join('\n\n');
+
+    const relationSummary = diagramModel.relations.length > 0 ? `
+
+## Relaciones UML Implementadas
+
+Este proyecto implementa correctamente todos los tipos de relaciones UML:
+
+### 🧬 HERENCIA
+- **Estrategia**: \`JOINED\` (tabla por clase)
+- **Discriminador**: Columna \`type\` para identificar subtipos
+- **Uso**: Clases padre e hijas con campos comunes
+
+### 🔗 ASOCIACIÓN
+- **Características**: Relación simple de referencia
+- **Cascade**: Ninguno (\`CascadeType.NONE\`)
+- **Uso**: Referencias independientes entre entidades
+
+### 📦 AGREGACIÓN
+- **Características**: Relación "tiene-un" débil
+- **Cascade**: \`PERSIST\` y \`MERGE\` solamente
+- **Uso**: Los objetos pueden existir independientemente
+
+### 🏗️ COMPOSICIÓN
+- **Características**: Relación "parte-de" fuerte
+- **Cascade**: \`CascadeType.ALL\` + \`orphanRemoval=true\`
+- **Uso**: Ciclo de vida dependiente, eliminación en cascada
+
+### Cardinalidades Soportadas
+- **1 → 1**: \`@OneToOne\`
+- **1 → ***: \`@OneToMany\` / \`@ManyToOne\`
+- **\\* → ***: \`@ManyToMany\` con tabla intermedia
+` : '';
+
     return `# ${config.artifactId} (Backend generado)
 
 ## Tecnologías
@@ -725,20 +1245,20 @@ volumes:
 ## Ejecución rápida
 mvn spring-boot:run
 
-Swagger UI: http://localhost:8080/api/swagger-ui/index.html
+Swagger UI: http://localhost:8080/api/swagger-ui.html
 
 ## Docker
 docker compose up --build
 
 ## Estructura
-- entity: Entidades JPA
-- dto: Transfer Objects
-- repository: Acceso a datos
-- service / service.impl: Lógica + mapeo DTO
+- entity: Entidades JPA con relaciones completas
+- dto: Transfer Objects optimizados
+- repository: Acceso a datos con consultas relacionales
+- service / service.impl: Lógica + mapeo DTO con gestión de relaciones
 - controller: Endpoints REST
 - config: CORS + OpenAPI
 - exception: Manejadores globales
-
+${relationSummary}
 ## Entidades
 ${sectionPerEntity}
 `;
@@ -1232,33 +1752,58 @@ public class GlobalExceptionHandler {
             </div>
           ) : (
             <div className="classes-list">
-              {diagramModel.classes.map(c => (
-                <div key={c.id} className="class-preview">
-                  <h3>{c.name}</h3>
-                  <div className="attributes">
-                    <h4>Atributos ({c.attributes.length})</h4>
-                    <ul>
-                      {c.attributes.map((attr, idx) => (
-                        <li key={idx}>
-                          {toFieldName(attr.name)}: {mapUMLTypeToJava(attr.type)}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  {c.methods.length > 0 && (
-                    <div className="methods">
-                      <h4>Métodos ({c.methods.length})</h4>
+              {diagramModel.classes.map(c => {
+                const processedRelations = processRelations(diagramModel.relations, diagramModel.classes);
+                const entityRelations = processedRelations.filter(rel => rel.ownerId === c.displayId);
+                
+                return (
+                  <div key={c.id} className="class-preview">
+                    <h3>{c.name}</h3>
+                    <div className="attributes">
+                      <h4>Atributos ({c.attributes.length})</h4>
                       <ul>
-                        {c.methods.map((m, idx) => (
+                        {c.attributes.map((attr, idx) => (
                           <li key={idx}>
-                            {m.name}(): {mapUMLTypeToJava(m.returns)}
+                            {toFieldName(attr.name)}: {mapUMLTypeToJava(attr.type)}
                           </li>
                         ))}
                       </ul>
                     </div>
-                  )}
-                </div>
-              ))}
+                    {entityRelations.length > 0 && (
+                      <div className="relations">
+                        <h4>Relaciones ({entityRelations.length})</h4>
+                        <ul>
+                          {entityRelations.map((rel, idx) => (
+                            <li key={idx} className={`relation-${rel.umlType}`}>
+                              <strong>{rel.umlType.toUpperCase()}</strong>: {rel.fieldName} → {rel.relatedClassName}
+                              <br />
+                              <small>
+                                JPA: {rel.type}
+                                {rel.type === 'ManyToOne' || (rel.type === 'OneToOne' && rel.isOwner) ? ' (FK)' : ''}
+                                {rel.type === 'Inheritance' ? ' (extends)' : ''}
+                                {rel.cascadeType !== 'NONE' ? ` | Cascade: ${rel.cascadeType}` : ''}
+                                {rel.orphanRemoval ? ' | OrphanRemoval' : ''}
+                              </small>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {c.methods.length > 0 && (
+                      <div className="methods">
+                        <h4>Métodos ({c.methods.length})</h4>
+                        <ul>
+                          {c.methods.map((m, idx) => (
+                            <li key={idx}>
+                              {m.name}(): {mapUMLTypeToJava(m.returns)}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1276,7 +1821,8 @@ public class GlobalExceptionHandler {
         <div className="generation-info">
           <p>Se generará un proyecto Maven completo con:</p>
           <ul>
-            <li>{diagramModel.classes.length} Entidades JPA</li>
+            <li>{diagramModel.classes.length} Entidades JPA con relaciones (FK)</li>
+            <li>{diagramModel.relations.length} Relaciones (@ManyToOne, @OneToMany, etc.)</li>
             <li>{diagramModel.classes.length} Repositorios</li>
             <li>{diagramModel.classes.length} Servicios + Impl</li>
             <li>{diagramModel.classes.length} Controladores REST</li>

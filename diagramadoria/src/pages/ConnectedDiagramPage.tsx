@@ -7,6 +7,7 @@ import { FiDownload, FiUpload } from 'react-icons/fi';
 import { saveAs } from 'file-saver';
 import '../styles/DiagramCss.css'
 import AudioIAPage from './AudioIAPage'
+import ChatBotPanel from '../components/chat/ChatBotPanel'
 import 'jointjs/dist/joint.css'
 import type { ActionSuggestion } from '../ai/openaiClient'
 import { suggestAttributesForClasses, type AttributeSuggestion, suggestClassesFromProjectTitle, type ClassSuggestion, suggestRelationsFromProjectTitle, type RelationSuggestion } from '../ai/openaiClient'
@@ -90,6 +91,7 @@ const ConnectedDiagramPage: React.FC = () => {
     const [openCollab, setOpenCollab] = useState<boolean>(false);
     const [openActivity, setOpenActivity] = useState<boolean>(false);
     const [openReco, setOpenReco] = useState<boolean>(false);
+    const [openChatBot, setOpenChatBot] = useState<boolean>(false);
     const [recoLoading, setRecoLoading] = useState<boolean>(false);
     const [recoList, setRecoList] = useState<AttributeSuggestion[]>([]);
     // Nueva sección: recomendaciones de CLASES/tablas basadas en el título del proyecto
@@ -529,6 +531,76 @@ const ConnectedDiagramPage: React.FC = () => {
         } catch {}
     });
 
+    // Handle clicks on relation delete buttons
+    paperInstance.on('link:pointerclick', function(linkView: any, evt: any) {
+        const target = evt.target as Element;
+        const isDeleteRelation = !!(target && (target as Element).closest && (target as Element).closest('.delete-relation-btn'));
+        
+        if (isDeleteRelation) {
+            // Verificar permisos
+            if (!(roleRef.current === 'creador' || roleRef.current === 'editor')) return;
+            
+            const link = linkView.model;
+            const sourceElement = link.getSourceElement();
+            const targetElement = link.getTargetElement();
+            
+            if (sourceElement && targetElement) {
+                try {
+                    // Encontrar las clases correspondientes
+                    const sourceClass = classesRef.current.find(c => c.element === sourceElement);
+                    const targetClass = classesRef.current.find(c => c.element === targetElement);
+                    
+                    if (sourceClass && targetClass) {
+                        // Eliminar del graph
+                        suppressLinkEmitRef.current = true;
+                        link.remove();
+                        suppressLinkEmitRef.current = false;
+                        
+                        // Eliminar del estado de relaciones
+                        setRelations(prev => prev.filter(r => 
+                            !((r.fromDisplayId === sourceClass.displayId && r.toDisplayId === targetClass.displayId) ||
+                              (r.fromDisplayId === targetClass.displayId && r.toDisplayId === sourceClass.displayId))
+                        ));
+                        
+                        // Registrar actividad y broadcast
+                        const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
+                        if (pidNum) {
+                            const selfId = Number(localStorage.getItem('userId') || 0);
+                            const selfName = getUserDisplay(selfId);
+                            addActivity(String(pidNum), { 
+                                type: 'delete_relation', 
+                                message: `${selfName} eliminó relación entre #${sourceClass.displayId} (${sourceClass.name}) y #${targetClass.displayId} (${targetClass.name})`, 
+                                byUserId: selfId, 
+                                byName: selfName 
+                            });
+                            setActivities(getActivities(String(pidNum)));
+                            
+                            try {
+                                const selfId = Number(localStorage.getItem('userId') || 0);
+                                const payload = {
+                                    projectId: pidNum,
+                                    userId: selfId,
+                                    diagramData: {
+                                        fromDisplayId: sourceClass.displayId,
+                                        toDisplayId: targetClass.displayId,
+                                        fromName: sourceClass.name,
+                                        toName: targetClass.name
+                                    },
+                                    changeType: 'delete_relation',
+                                    elementId: `${sourceClass.displayId}-${targetClass.displayId}`,
+                                    timestamp: new Date().toISOString()
+                                };
+                                socketService.sendDiagramUpdate(payload);
+                            } catch {}
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error eliminando relación:', error);
+                }
+            }
+        }
+    });
+
     // Listen for remote diagram updates
     socketService.on('diagram-updated', (data: any) => {
         try {
@@ -816,6 +888,56 @@ const ConnectedDiagramPage: React.FC = () => {
                         setRelations(prev => prev.filter(r => r.fromDisplayId !== displayId && r.toDisplayId !== displayId));
                     } catch (e) { console.error('Error applying delete_element:', e); }
                     finally {
+                        try { pInst.unfreeze(); } catch {}
+                        applyingRemoteRef.current = false;
+                    }
+                    return;
+                }
+                
+                // Fast-path delete_relation: remove only specific relation
+                if (data.changeType === 'delete_relation' && incoming && typeof incoming === 'object') {
+                    try {
+                        applyingRemoteRef.current = true;
+                        const fromDisplayId = (incoming as any).fromDisplayId as number | undefined;
+                        const toDisplayId = (incoming as any).toDisplayId as number | undefined;
+                        
+                        if (fromDisplayId == null || toDisplayId == null) return;
+                        
+                        // Find the classes
+                        const sourceClass = classesRef.current.find(c => c.displayId === fromDisplayId);
+                        const targetClass = classesRef.current.find(c => c.displayId === toDisplayId);
+                        
+                        if (!sourceClass?.element || !targetClass?.element) return;
+                        
+                        pInst.freeze();
+                        
+                        // Find and remove the link from graph
+                        try {
+                            suppressLinkEmitRef.current = true;
+                            const links = (gInst as any).getLinks ? (gInst as any).getLinks() : [];
+                            const sourceId = (sourceClass.element as any).id;
+                            const targetId = (targetClass.element as any).id;
+                            
+                            links.forEach((l: any) => {
+                                const sourceElementId = l.get('source')?.id;
+                                const targetElementId = l.get('target')?.id;
+                                if ((sourceElementId === sourceId && targetElementId === targetId) ||
+                                    (sourceElementId === targetId && targetElementId === sourceId)) {
+                                    l.remove();
+                                }
+                            });
+                            suppressLinkEmitRef.current = false;
+                        } catch {}
+                        
+                        // Update relations state
+                        setRelations(prev => prev.filter(r => 
+                            !((r.fromDisplayId === fromDisplayId && r.toDisplayId === toDisplayId) ||
+                              (r.fromDisplayId === toDisplayId && r.toDisplayId === fromDisplayId))
+                        ));
+                        
+                    } catch (e) { 
+                        console.error('Error applying delete_relation:', e); 
+                    } finally {
                         try { pInst.unfreeze(); } catch {}
                         applyingRemoteRef.current = false;
                     }
@@ -1427,7 +1549,68 @@ const ConnectedDiagramPage: React.FC = () => {
                 if (rel.originCard) labels.push({ position: 0.15, attrs: { text: { text: rel.originCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
                 if (rel.destCard) labels.push({ position: 0.85, attrs: { text: { text: rel.destCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
                 if (rel.verb) labels.push({ position: 0.5, attrs: { text: { text: rel.verb, fill: '#111', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#fff', stroke: '#e5e7eb', strokeWidth: 1, rx: 6, ry: 6, opacity: 0.9 } } });
+                
+                // Agregar botón de eliminación para usuarios con permisos
+                if (includeButtons) {
+                    labels.push({
+                        position: rel.verb ? 0.35 : 0.5,
+                        attrs: {
+                            text: { 
+                                text: '❌', 
+                                fill: '#dc3545', 
+                                fontSize: 14, 
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                            },
+                            rect: { 
+                                fill: '#ffffff', 
+                                stroke: '#dc3545', 
+                                strokeWidth: 1, 
+                                rx: 8, 
+                                ry: 8, 
+                                opacity: 0.9,
+                                cursor: 'pointer'
+                            }
+                        },
+                        markup: [
+                            { tagName: 'rect', selector: 'rect' },
+                            { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
+                        ]
+                    });
+                }
+                
                 try { link.labels(labels); } catch {}
+            } else {
+                // Para otros tipos de relación, solo agregar botón de eliminación
+                if (includeButtons) {
+                    try {
+                        link.labels([{
+                            position: 0.5,
+                            attrs: {
+                                text: { 
+                                    text: '❌', 
+                                    fill: '#dc3545', 
+                                    fontSize: 14, 
+                                    fontWeight: 'bold',
+                                    cursor: 'pointer'
+                                },
+                                rect: { 
+                                    fill: '#ffffff', 
+                                    stroke: '#dc3545', 
+                                    strokeWidth: 1, 
+                                    rx: 8, 
+                                    ry: 8, 
+                                    opacity: 0.9,
+                                    cursor: 'pointer'
+                                }
+                            },
+                            markup: [
+                                { tagName: 'rect', selector: 'rect' },
+                                { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
+                            ]
+                        }]);
+                    } catch {}
+                }
             }
             link.connector('smooth');
             
@@ -1516,7 +1699,68 @@ const ConnectedDiagramPage: React.FC = () => {
             if (rel.originCard) labels.push({ position: 0.15, attrs: { text: { text: rel.originCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
             if (rel.destCard) labels.push({ position: 0.85, attrs: { text: { text: rel.destCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
             if (rel.verb) labels.push({ position: 0.5, attrs: { text: { text: rel.verb, fill: '#111', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#fff', stroke: '#e5e7eb', strokeWidth: 1, rx: 6, ry: 6, opacity: 0.9 } } });
+            
+            // Agregar botón de eliminación para usuarios con permisos
+            if (myRole === 'creador' || myRole === 'editor') {
+                labels.push({
+                    position: rel.verb ? 0.35 : 0.5,
+                    attrs: {
+                        text: { 
+                            text: '❌', 
+                            fill: '#dc3545', 
+                            fontSize: 14, 
+                            fontWeight: 'bold',
+                            cursor: 'pointer'
+                        },
+                        rect: { 
+                            fill: '#ffffff', 
+                            stroke: '#dc3545', 
+                            strokeWidth: 1, 
+                            rx: 8, 
+                            ry: 8, 
+                            opacity: 0.9,
+                            cursor: 'pointer'
+                        }
+                    },
+                    markup: [
+                        { tagName: 'rect', selector: 'rect' },
+                        { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
+                    ]
+                });
+            }
+            
             try { link.labels(labels); } catch {}
+        } else {
+            // Para otros tipos de relación, solo agregar botón de eliminación
+            if (myRole === 'creador' || myRole === 'editor') {
+                try {
+                    link.labels([{
+                        position: 0.5,
+                        attrs: {
+                            text: { 
+                                text: '❌', 
+                                fill: '#dc3545', 
+                                fontSize: 14, 
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                            },
+                            rect: { 
+                                fill: '#ffffff', 
+                                stroke: '#dc3545', 
+                                strokeWidth: 1, 
+                                rx: 8, 
+                                ry: 8, 
+                                opacity: 0.9,
+                                cursor: 'pointer'
+                            }
+                        },
+                        markup: [
+                            { tagName: 'rect', selector: 'rect' },
+                            { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
+                        ]
+                    }]);
+                } catch {}
+            }
         }
         link.connector('smooth');
         try { link.addTo(g); } catch {}
@@ -2049,6 +2293,36 @@ const ConnectedDiagramPage: React.FC = () => {
                         }
                     });
                 }
+                
+                // Agregar botón de eliminación para usuarios con permisos
+                if (myRole === 'creador' || myRole === 'editor') {
+                    labels.push({
+                        position: relationVerb && relationVerb.trim() ? 0.35 : 0.5,
+                        attrs: {
+                            text: { 
+                                text: '❌', 
+                                fill: '#dc3545', 
+                                fontSize: 14, 
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                            },
+                            rect: { 
+                                fill: '#ffffff', 
+                                stroke: '#dc3545', 
+                                strokeWidth: 1, 
+                                rx: 8, 
+                                ry: 8, 
+                                opacity: 0.9,
+                                cursor: 'pointer'
+                            }
+                        },
+                        markup: [
+                            { tagName: 'rect', selector: 'rect' },
+                            { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
+                        ]
+                    });
+                }
+                
                 link.labels(labels);
             } catch (e) {
                 try {
@@ -2060,7 +2334,68 @@ const ConnectedDiagramPage: React.FC = () => {
                         // @ts-ignore
                         link.appendLabel({ position: 0.5, attrs: { text: { text: relationVerb.trim(), fill: '#111', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#fff', stroke: '#e5e7eb', strokeWidth: 1, rx: 6, ry: 6, opacity: 0.9 } } });
                     }
+                    // Agregar botón de eliminación en el catch también
+                    if (myRole === 'creador' || myRole === 'editor') {
+                        // @ts-ignore
+                        link.appendLabel({ 
+                            position: relationVerb && relationVerb.trim() ? 0.35 : 0.5, 
+                            attrs: { 
+                                text: { text: '❌', fill: '#dc3545', fontSize: 14, fontWeight: 'bold', cursor: 'pointer' }, 
+                                rect: { fill: '#ffffff', stroke: '#dc3545', strokeWidth: 1, rx: 8, ry: 8, opacity: 0.9, cursor: 'pointer' } 
+                            },
+                            markup: [
+                                { tagName: 'rect', selector: 'rect' },
+                                { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
+                            ]
+                        });
+                    }
                 } catch {}
+            }
+        } else {
+            // Para otros tipos de relación (herencia, agregación, composición), solo agregar botón de eliminación
+            if (myRole === 'creador' || myRole === 'editor') {
+                try {
+                    link.labels([{
+                        position: 0.5,
+                        attrs: {
+                            text: { 
+                                text: '❌', 
+                                fill: '#dc3545', 
+                                fontSize: 14, 
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                            },
+                            rect: { 
+                                fill: '#ffffff', 
+                                stroke: '#dc3545', 
+                                strokeWidth: 1, 
+                                rx: 8, 
+                                ry: 8, 
+                                opacity: 0.9,
+                                cursor: 'pointer'
+                            }
+                        },
+                        markup: [
+                            { tagName: 'rect', selector: 'rect' },
+                            { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
+                        ]
+                    }]);
+                } catch (e) {
+                    try {
+                        // @ts-ignore
+                        link.appendLabel({ 
+                            position: 0.5, 
+                            attrs: { 
+                                text: { text: '❌', fill: '#dc3545', fontSize: 14, fontWeight: 'bold', cursor: 'pointer' }, 
+                                rect: { fill: '#ffffff', stroke: '#dc3545', strokeWidth: 1, rx: 8, ry: 8, opacity: 0.9, cursor: 'pointer' } 
+                            },
+                            markup: [
+                                { tagName: 'rect', selector: 'rect' },
+                                { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
+                            ]
+                        });
+                    } catch {}
+                }
             }
         }
     link.connector('smooth');
@@ -2140,7 +2475,68 @@ const ConnectedDiagramPage: React.FC = () => {
             if (originCard) labels.push({ position: 0.15, attrs: { text: { text: originCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
             if (destCard) labels.push({ position: 0.85, attrs: { text: { text: destCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
             if (verb) labels.push({ position: 0.5, attrs: { text: { text: verb, fill: '#111', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#fff', stroke: '#e5e7eb', strokeWidth: 1, rx: 6, ry: 6, opacity: 0.9 } } });
+            
+            // Agregar botón de eliminación
+            if (myRole === 'creador' || myRole === 'editor') {
+                labels.push({
+                    position: verb ? 0.35 : 0.5,
+                    attrs: {
+                        text: { 
+                            text: '❌', 
+                            fill: '#dc3545', 
+                            fontSize: 14, 
+                            fontWeight: 'bold',
+                            cursor: 'pointer'
+                        },
+                        rect: { 
+                            fill: '#ffffff', 
+                            stroke: '#dc3545', 
+                            strokeWidth: 1, 
+                            rx: 8, 
+                            ry: 8, 
+                            opacity: 0.9,
+                            cursor: 'pointer'
+                        }
+                    },
+                    markup: [
+                        { tagName: 'rect', selector: 'rect' },
+                        { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
+                    ]
+                });
+            }
+            
             try { link.labels(labels as any); } catch {}
+        } else {
+            // Para otros tipos de relación, solo agregar botón de eliminación
+            if (myRole === 'creador' || myRole === 'editor') {
+                try {
+                    link.labels([{
+                        position: 0.5,
+                        attrs: {
+                            text: { 
+                                text: '❌', 
+                                fill: '#dc3545', 
+                                fontSize: 14, 
+                                fontWeight: 'bold',
+                                cursor: 'pointer'
+                            },
+                            rect: { 
+                                fill: '#ffffff', 
+                                stroke: '#dc3545', 
+                                strokeWidth: 1, 
+                                rx: 8, 
+                                ry: 8, 
+                                opacity: 0.9,
+                                cursor: 'pointer'
+                            }
+                        },
+                        markup: [
+                            { tagName: 'rect', selector: 'rect' },
+                            { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
+                        ]
+                    }]);
+                } catch {}
+            }
         }
         link.connector('smooth');
         creatingLinkRef.current = true;
@@ -2742,6 +3138,31 @@ const ConnectedDiagramPage: React.FC = () => {
                     <span style={{ fontWeight: 700 }}>Recomendaciones</span>
                 </button>
 
+                {/* Acceso rápido al Chat Bot (side panel) */}
+                <button
+                    onClick={() => setOpenChatBot(!openChatBot)}
+                    title={openChatBot ? 'Ocultar Chat Bot' : 'Mostrar Chat Bot'}
+                    style={{
+                        position: 'absolute',
+                        top: 10,
+                        right: 350,
+                        zIndex: 5,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        background: '#eef2ff',
+                        color: '#3730a3',
+                        border: '1px solid #6366f1',
+                        borderRadius: 8,
+                        padding: '6px 10px',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+                        cursor: 'pointer'
+                    }}
+                >
+                    💬
+                    <span style={{ fontWeight: 700 }}>Chat Bot</span>
+                </button>
+
                 {/* Toggle para recomendaciones de CLASES/tablas */}
                 <button
                     onClick={() => { const next = !openClassReco; setOpenClassReco(next); if (next) fetchClassRecommendations(); }}
@@ -2886,6 +3307,41 @@ const ConnectedDiagramPage: React.FC = () => {
                                     </button>
                                 </div>
                             ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Panel lateral para Chat Bot */}
+                {openChatBot && (
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: 54,
+                            right: 750,
+                            width: 360,
+                            maxWidth: '90vw',
+                            height: '70%',
+                            maxHeight: '80vh',
+                            background: '#ffffff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 10,
+                            boxShadow: '0 6px 18px rgba(0,0,0,0.15)',
+                            zIndex: 5,
+                            display: 'flex',
+                            flexDirection: 'column'
+                        }}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderBottom: '1px solid #e5e7eb', background: '#eef2ff', borderTopLeftRadius: 10, borderTopRightRadius: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ color: '#3730a3' }}>💬</span>
+                                <strong>Chat Bot</strong>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => setOpenChatBot(false)} style={{ border: '1px solid #e5e7eb', background: '#fff', borderRadius: 6, padding: '6px 10px' }}>Cerrar</button>
+                            </div>
+                        </div>
+                        <div style={{ padding: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
+                            <ChatBotPanel />
                         </div>
                     </div>
                 )}
@@ -3120,12 +3576,12 @@ const ConnectedDiagramPage: React.FC = () => {
                             </div>
 
                             {/* Métodos dinámicos */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
+                            {/* <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 14 }}>
                                 <label style={{ margin: 0 }}>Métodos:</label>
                                 <button type="button" onClick={() => setEditModal(m => ({ ...m, methodsArr: [...m.methodsArr, { name: '', returns: '' }] }))} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: '#28a745', color: '#fff', border: 'none', borderRadius: 4 }}>
                                     <FaPlus /> Agregar método
                                 </button>
-                            </div>
+                            </div> */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 6 }}>
                                 {editModal.methodsArr.map((mt, idx) => (
                                     <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'center' }}>
