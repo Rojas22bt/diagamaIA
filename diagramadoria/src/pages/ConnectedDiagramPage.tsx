@@ -268,8 +268,62 @@ const ConnectedDiagramPage: React.FC = () => {
         }
     };
 
+    // Normaliza atributos sugeridos para clases: garantiza 'id' propio y elimina llaves foráneas
+    const normalizeSuggestedClassAttributes = (
+        _currentClassName: string,
+        suggested: Array<{ name: string; type: string; reason?: string }>,
+        allClassNames: string[]
+    ): Array<{ name: string; type: string }> => {
+        const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '').replace(/_/g, '');
+        const classSet = new Set(allClassNames.map(norm));
+    // const self = norm(currentClassName); // reservado para posibles reglas futuras
+
+        const isForeignKeyName = (attrName: string) => {
+            const n = norm(attrName);
+            if (n === 'id') return false; // propio id
+            // patrones comunes de FK
+            if (/(^id[a-z0-9_]+)|([a-z0-9_]+id$)/i.test(attrName)) {
+                // Si el prefijo/sufijo coincide con alguna clase conocida, trátalo como FK
+                for (const cn of classSet) {
+                    if (n === `${cn}id` || n === `id${cn}`) return true;
+                }
+                // heurística: nombres tipo userId, order_id
+                return true;
+            }
+            // referencias por nombre de clase explícita
+            for (const cn of classSet) {
+                if (n === `${cn}fk` || n === `fk${cn}`) return true;
+            }
+            return false;
+        };
+
+        // 1) eliminar duplicados por nombre (case-insensitive)
+        const seen = new Set<string>();
+        let filtered = suggested.filter(a => {
+            const key = norm(a.name);
+            if (!key) return false;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        // 2) quitar llaves foráneas hacia otras clases
+        filtered = filtered.filter(a => !isForeignKeyName(a.name));
+
+        // 3) garantizar atributo 'id' propio al inicio
+        const hasId = filtered.some(a => norm(a.name) === 'id');
+        if (!hasId) {
+            filtered = [{ name: 'id', type: 'Int' }, ...filtered];
+        }
+
+        // 4) si el atributo 'id' existe pero sin tipo, darle uno por defecto
+        filtered = filtered.map(a => norm(a.name) === 'id' ? { name: a.name, type: a.type?.trim() || 'Int' } : { name: a.name, type: a.type } );
+
+        return filtered;
+    };
+
     // Agregar una clase sugerida por IA al diagrama (visible para todos via WebSocket)
-    const addSuggestedClass = (suggestion: ClassSuggestion) => {
+    const addSuggestedClass = (suggestion: ClassSuggestion, forcedDisplayId?: number) => {
         if (!graph || !(myRole === 'creador' || myRole === 'editor')) return;
         const name = (suggestion.name || '').trim() || 'Clase';
         if (!name) return;
@@ -279,8 +333,14 @@ const ConnectedDiagramPage: React.FC = () => {
         const id = Date.now();
         const x = 120 + classesRef.current.length * 60;
         const y = 120 + classesRef.current.length * 60;
-        const displayId = nextNumberRef.current;
-        const attributes = (suggestion.attributes || []).map(a => `${a.name}: ${a.type}`);
+        const displayId = typeof forcedDisplayId === 'number' ? forcedDisplayId : nextNumberRef.current;
+        // Normalizar atributos: agregar 'id' propio y quitar FKs hacia otras clases
+        const allNames = [
+            ...classesRef.current.map(c => c.name),
+            ...classRecoList.map(s => s.name)
+        ];
+        const normalizedAttrs = normalizeSuggestedClassAttributes(name, (suggestion.attributes || []), allNames);
+        const attributes = normalizedAttrs.map(a => `${a.name}: ${a.type}`);
     const methods: string[] = [];
 
     const labelText = `${name}\n-----------------------\n${attributes.join('\n')}`;
@@ -313,8 +373,9 @@ const ConnectedDiagramPage: React.FC = () => {
         rect.addTo(graph);
         clampElementInside(rect);
 
-        setClasses(prev => [...prev, { id, name, x, y, displayId, attributes, methods, element: rect }]);
-        setNextNumber(n => n + 1);
+    setClasses(prev => [...prev, { id, name, x, y, displayId, attributes, methods, element: rect }]);
+    // Asegurar avance del contador (evita duplicados en inserciones rápidas o en lote)
+    setNextNumber(n => Math.max(n, displayId + 1));
 
         const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
         if (pidNum) {
@@ -332,10 +393,53 @@ const ConnectedDiagramPage: React.FC = () => {
         }
     };
 
-    // const addAllSuggestedClasses = () => {
-    //     if (!(myRole === 'creador' || myRole === 'editor')) return;
-    //     classRecoList.forEach(s => addSuggestedClass(s));
-    // };
+    // Agregar todas las clases sugeridas y luego pedir a la IA relaciones y dibujarlas
+    const addAllSuggestedClasses = async () => {
+        if (!(myRole === 'creador' || myRole === 'editor')) return;
+        if (!graph) return;
+        if (classRecoList.length === 0) return;
+
+        try {
+            setClassRecoLoading(true);
+            // 1) Agregar clases (evitar duplicados por nombre ya existentes)
+            const existingNames = new Set(classesRef.current.map(c => c.name.toLowerCase()));
+            let nextId = nextNumberRef.current;
+            for (const s of classRecoList) {
+                if (!s?.name) continue;
+                if (existingNames.has(s.name.toLowerCase())) continue;
+                addSuggestedClass(s, nextId);
+                nextId += 1;
+                existingNames.add(s.name.toLowerCase());
+            }
+
+            // 2) Esperar un poco a que React/JointJS terminen de insertar
+            await new Promise(res => setTimeout(res, 350));
+
+            // 3) Pedir relaciones recomendadas y aplicarlas
+            if (projectId) {
+                try {
+                    const proj = await projectApi.getProjectById(Number(projectId));
+                    const title = proj?.name || 'Proyecto';
+                    const names = classesRef.current.map(c => c.name);
+                    const rels = await suggestRelationsFromProjectTitle(title, names);
+                    // dedupe
+                    const key = (r: RelationSuggestion) => `${r.originName}__${r.destName}__${r.relationType || 'asociacion'}__${r.originCard || ''}__${r.destCard || ''}__${r.verb || ''}`;
+                    const seen = new Set<string>();
+                    const filtered = (rels || []).filter(r => {
+                        const k = key(r); if (seen.has(k)) return false; seen.add(k); return true;
+                    });
+                    // Aplicar
+                    for (const r of filtered) {
+                        applySuggestedRelation(r);
+                    }
+                } catch (e) {
+                    console.error('No se pudieron obtener/aplicar relaciones sugeridas tras agregar clases:', e);
+                }
+            }
+        } finally {
+            setClassRecoLoading(false);
+        }
+    };
 
     // Resaltar clases cuando se escribe el número de origen/destino
     useEffect(() => {
@@ -1405,8 +1509,93 @@ const ConnectedDiagramPage: React.FC = () => {
         };
     };
 
+    // Normaliza displayId únicos en modelos importados o remotos y mantiene relaciones coherentes
+    const normalizeModelDisplayIds = (model: DiagramModel): DiagramModel => {
+        try {
+            const classes = Array.isArray(model.classes) ? [...model.classes] : [];
+            const relations = Array.isArray(model.relations) ? [...model.relations] : [];
+            const used = new Set<number>();
+            let maxId = 0;
+            // Ocorrencias por id
+            const occ: Record<number, number[]> = {};
+            classes.forEach((c, idx) => {
+                const idNum = Number(c.displayId);
+                if (!occ[idNum]) occ[idNum] = [];
+                occ[idNum].push(idx);
+            });
+            // Inicializar usados con el primer índice de cada id válido > 0
+            for (const idStr of Object.keys(occ)) {
+                const idNum = Number(idStr);
+                if (Number.isFinite(idNum) && idNum > 0) {
+                    // Mantener el primero
+                    used.add(idNum);
+                    if (idNum > maxId) maxId = idNum;
+                }
+            }
+            let nextId = Math.max(1, maxId + 1);
+            const invalidMapping = new Map<number, number>();
+            // Reasignar: todos los inválidos y los duplicados a partir del segundo
+            for (const [idStr, idxs] of Object.entries(occ)) {
+                const idNum = Number(idStr);
+                const isValid = Number.isFinite(idNum) && idNum > 0;
+                if (!isValid) {
+                    // Todos estos deben reasignarse
+                    for (const idx of idxs) {
+                        while (used.has(nextId)) nextId++;
+                        const newId = nextId++;
+                        used.add(newId);
+                        invalidMapping.set(idNum, newId);
+                        (classes[idx] as any).displayId = newId;
+                        (classes[idx] as any).id = `c-${newId}`;
+                    }
+                    continue;
+                }
+                // Duplicados válidos: conservar el primero, reasignar el resto
+                const [keep, ...dups] = idxs;
+                if (typeof keep === 'number') {
+                    (classes[keep] as any).displayId = idNum;
+                    (classes[keep] as any).id = `c-${idNum}`;
+                }
+                for (const idx of dups) {
+                    while (used.has(nextId)) nextId++;
+                    const newId = nextId++;
+                    used.add(newId);
+                    (classes[idx] as any).displayId = newId;
+                    (classes[idx] as any).id = `c-${newId}`;
+                    // Importante: no mapear el id viejo a nuevo para no redirigir relaciones ambiguas
+                }
+            }
+            // Actualizar relaciones solo para ids inválidos (no para duplicados)
+            const classIds = new Set(classes.map(c => c.displayId));
+            const normalizedRelations: UMLRelation[] = relations
+                .map(r => {
+                    let from = r.fromDisplayId;
+                    let to = r.toDisplayId;
+                    if (invalidMapping.has(from)) from = invalidMapping.get(from)!;
+                    if (invalidMapping.has(to)) to = invalidMapping.get(to)!;
+                    return { ...r, fromDisplayId: from, toDisplayId: to };
+                })
+                .filter(r => classIds.has(r.fromDisplayId) && classIds.has(r.toDisplayId));
+
+            // Recalcular nextDisplayId
+            const newMax = Math.max(0, ...classes.map(c => c.displayId));
+            const newNext = Math.max(model.nextDisplayId || 1, newMax + 1);
+
+            return {
+                version: 1,
+                nextDisplayId: newNext,
+                classes,
+                relations: normalizedRelations
+            } as DiagramModel;
+        } catch {
+            return model;
+        }
+    };
+
     const renderFromModel = (model: DiagramModel, g: joint.dia.Graph, includeButtons: boolean = true) => {
         console.log('renderFromModel called with:', model, 'includeButtons:', includeButtons);
+        // Asegurar IDs únicos antes de renderizar
+        const normalized = normalizeModelDisplayIds(model);
         
         // Limpia y pinta todo basado en modelo
         console.log('Freezing paper and clearing graph...');
@@ -1426,7 +1615,7 @@ const ConnectedDiagramPage: React.FC = () => {
         const newClasses: ClassType[] = [];
         
         // Pintar clases
-        const classList = [...(model.classes || [])].sort((a,b)=>a.displayId - b.displayId);
+    const classList = [...(normalized.classes || [])].sort((a,b)=>a.displayId - b.displayId);
         console.log('Rendering classes:', classList.length);
         
         for (const node of classList) {
@@ -1517,15 +1706,15 @@ const ConnectedDiagramPage: React.FC = () => {
         console.log('Setting state with', newClasses.length, 'classes and', (model.relations || []).length, 'relations');
         
         // Update state but don't trigger autosave (we're applying remote changes)
-        setClasses(newClasses);
-        setRelations(model.relations || []);
-        setNextNumber(model.nextDisplayId || (Math.max(0, ...newClasses.map(c => c.displayId)) + 1));
+    setClasses(newClasses);
+    setRelations(normalized.relations || []);
+    setNextNumber(normalized.nextDisplayId || (Math.max(0, ...newClasses.map(c => c.displayId)) + 1));
 
         // Pintar relaciones
-        console.log('Rendering relations:', model.relations?.length || 0);
+    console.log('Rendering relations:', normalized.relations?.length || 0);
         const getElByDisplay = (idNum: number) => newClasses.find(c => c.displayId === idNum)?.element;
         
-        for (const rel of model.relations || []) {
+    for (const rel of normalized.relations || []) {
             const origenEl = getElByDisplay(rel.fromDisplayId);
             const destinoEl = getElByDisplay(rel.toDisplayId);
             if (!origenEl || !destinoEl) {
@@ -3283,7 +3472,7 @@ const ConnectedDiagramPage: React.FC = () => {
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
                                 <button onClick={fetchClassRecommendations} disabled={classRecoLoading} style={{ background: '#0284c7', color: '#fff', border: 0, borderRadius: 6, padding: '6px 10px' }}>{classRecoLoading ? 'Cargando…' : 'Actualizar'}</button>
-                                {/* <button onClick={addAllSuggestedClasses} disabled={classRecoList.length === 0} style={{ background: '#10b981', color: '#fff', border: 0, borderRadius: 6, padding: '6px 10px' }}>Agregar todas</button> */}
+                        <button onClick={addAllSuggestedClasses} disabled={classRecoLoading || classRecoList.length === 0} style={{ background: '#10b981', color: '#fff', border: 0, borderRadius: 6, padding: '6px 10px' }}>{classRecoLoading ? 'Aplicando…' : 'Agregar todas + relaciones'}</button>
                                 <button onClick={() => setOpenClassReco(false)} style={{ border: '1px solid #e5e7eb', background: '#fff', borderRadius: 6, padding: '6px 10px' }}>Cerrar</button>
                             </div>
                         </div>
