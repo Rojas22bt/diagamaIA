@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
-import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
-import { Typography, Paper, Tabs, Tab, IconButton } from "@mui/material";
+import { Typography, Paper, Tabs, Tab, IconButton, Input } from "@mui/material";
 import MicIcon from "@mui/icons-material/Mic";
 import StopCircleIcon from "@mui/icons-material/StopCircle";
 import { suggestActionsFromText, type ActionSuggestion } from "../ai/openaiClient";
@@ -11,38 +10,17 @@ interface AudioRecorderProps {
 
 function AudioRecorder({ onTranscript }: AudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
-  const { transcript, resetTranscript } = useSpeechRecognition();
-  const supportsSR = SpeechRecognition.browserSupportsSpeechRecognition();
-  const isSecure = typeof window !== 'undefined' ? window.isSecureContext : true;
+  const [inputValue, setInputValue] = useState("");
 
-  useEffect(() => {
-    if (!supportsSR) {
-      alert("Tu navegador no soporta Web Speech API. Prueba Chrome en escritorio.");
-    } else if (!isSecure) {
-      alert("El micrófono requiere HTTPS. Abre el sitio con https://");
-    }
-  }, [supportsSR, isSecure]);
-
-  const startRecording = async () => {
-    try {
-      // Solicitar permiso de micrófono explícito en un gesto del usuario
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch (err) {
-      console.warn("Permiso de micrófono denegado o no disponible:", err);
-      alert("No se pudo acceder al micrófono. Verifica permisos del navegador y que el sitio esté en HTTPS.");
-      return;
-    }
+  const startRecording = () => {
     setIsRecording(true);
-    resetTranscript();
-    SpeechRecognition.startListening({ continuous: true, language: "es-ES" });
   };
 
   const stopRecording = () => {
     setIsRecording(false);
-    SpeechRecognition.stopListening();
-    if (transcript) {
-      onTranscript(transcript);
-      resetTranscript();
+    if (inputValue.trim()) {
+      onTranscript(inputValue);
+      setInputValue("");
     }
   };
 
@@ -55,22 +33,22 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
           size="small"
           aria-label={isRecording ? "Detener grabación" : "Iniciar grabación"}
           onClick={isRecording ? stopRecording : startRecording}
-          disabled={!supportsSR || !isSecure}
         >
           {isRecording ? <StopCircleIcon /> : <MicIcon />}
         </IconButton>
       </div>
-      <div className={`ai-voice ${isRecording ? 'recording' : ''}`}>
+      <div className="ai-voice">
         <Typography variant="body2" color={isRecording ? "error" : "textSecondary"}>
-          {!supportsSR
-            ? "Tu navegador no soporta Web Speech API. Prueba Chrome en escritorio."
-            : !isSecure
-              ? "El micrófono requiere HTTPS. Abre el sitio con https://"
-              : (isRecording ? "Grabando... (haz clic para detener)" : "Haz clic en el micrófono para empezar")}
+          {isRecording ? "Grabando... (haz clic para detener)" : "Haz clic en el micrófono para empezar"}
         </Typography>
-        <div className="ai-scrollbox" title={transcript}>
-          {transcript || (isRecording ? "Hablando..." : "Transcripción de audio aquí")}
-        </div>
+        {isRecording && (
+          <Input
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="Escribe o habla aquí..."
+            fullWidth
+          />
+        )}
       </div>
     </Paper>
   );
