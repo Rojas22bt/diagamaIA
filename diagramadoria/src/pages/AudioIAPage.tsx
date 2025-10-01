@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 import { Typography, Paper, Tabs, Tab, IconButton } from "@mui/material";
 import MicIcon from "@mui/icons-material/Mic";
@@ -14,6 +14,14 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
   const { transcript, resetTranscript } = useSpeechRecognition();
   const supportsSR = SpeechRecognition.browserSupportsSpeechRecognition();
   const isSecure = typeof window !== 'undefined' ? window.isSecureContext : true;
+
+  useEffect(() => {
+    if (!supportsSR) {
+      alert("Tu navegador no soporta Web Speech API. Prueba Chrome en escritorio.");
+    } else if (!isSecure) {
+      alert("El micrófono requiere HTTPS. Abre el sitio con https://");
+    }
+  }, [supportsSR, isSecure]);
 
   const startRecording = async () => {
     try {
