@@ -127,6 +127,11 @@ export function manualTables(): string {
   ].join('\n');
 }
 
+// Nuevo: instrucción fija para ejecutar el backend en localhost
+export function manualRunBackendLocalhost(): string {
+  return 'Debes abrir el backend en visual studio code, esperar almenos 1 minuto para cargar el backend y luego ingresar el siguiente comando: mvn clean spring-boot:run';
+}
+
 export function buildManualGuide(question: string): string {
   const q = normalize(question || '');
 
@@ -187,6 +192,15 @@ export function buildManualGuide(question: string): string {
   // Tablas (mencionadas en la descripción del usuario junto a relaciones)
   if (includesAny(q, ['tabla', 'tablas'])) {
     return manualTables();
+  }
+
+  // Cómo hacer funcionar/arrancar el backend en localhost
+  if (
+    includesAny(q, ['backend', 'back end']) &&
+    includesAny(q, ['localhost', 'local host', 'local']) &&
+    includesAny(q, ['funcionar', 'iniciar', 'levantar', 'arrancar', 'ejecutar', 'correr', 'run'])
+  ) {
+    return manualRunBackendLocalhost();
   }
 
   // Fallback general para diagrama UML y uso de IA
