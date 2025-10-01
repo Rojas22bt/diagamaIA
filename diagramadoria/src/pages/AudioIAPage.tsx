@@ -1,105 +1,106 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
-import { Typography, Paper, Tabs, Tab, IconButton, Input } from "@mui/material";
+import { Typography, Paper, Tabs, Tab, IconButton } from "@mui/material";
 import MicIcon from "@mui/icons-material/Mic";
 import StopCircleIcon from "@mui/icons-material/StopCircle";
-import { suggestActionsFromText, type ActionSuggestion } from "../ai/openaiClient";
+import { suggestActionsFromText, transcribeAudio, type ActionSuggestion } from "../ai/openaiClient";
 
 interface AudioRecorderProps {
   onTranscript: (text: string) => void;
 }
 
 function AudioRecorder({ onTranscript }: AudioRecorderProps) {
+  // Graba 10s con MediaRecorder y envía el audio a Whisper; no muestra texto intermedio
   const [isRecording, setIsRecording] = useState(false);
-  const [inputValue, setInputValue] = useState("");
-  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const recordTimerRef = useRef<number | null>(null);
-  const MAX_RECORDING_MS = 7000; // 7 segundos
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const stopTimerRef = useRef<number | null>(null);
+  const MAX_RECORDING_MS = 10000; // 10 segundos
 
   useEffect(() => {
     return () => {
-      if (audioStream) {
-        audioStream.getTracks().forEach((track) => track.stop());
+      if (stopTimerRef.current) {
+        clearTimeout(stopTimerRef.current);
+        stopTimerRef.current = null;
       }
-      if (recordTimerRef.current) {
-        clearTimeout(recordTimerRef.current);
-        recordTimerRef.current = null;
-      }
-      if (recognitionRef.current) {
-        try { recognitionRef.current.stop(); } catch {}
+      try { mediaRecorderRef.current?.stop(); } catch {}
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
       }
     };
-  }, [audioStream]);
+  }, []);
 
-  const handleVoiceInput = async () => {
-    if (!isRecording) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        setAudioStream(stream);
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          channelCount: { ideal: 1 },
+          sampleRate: { ideal: 16000 },
+        },
+      });
+      streamRef.current = stream;
 
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (!SpeechRecognition) {
-          alert("El reconocimiento de voz no está disponible en este navegador.");
-          return;
+      const candidates = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4',
+      ];
+      const mimeType = (MediaRecorder as any).isTypeSupported
+        ? candidates.find((t) => (MediaRecorder as any).isTypeSupported(t)) || ''
+        : '';
+      const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = mr;
+      chunksRef.current = [];
+
+      mr.ondataavailable = (e: any) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        chunksRef.current = [];
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((t) => t.stop());
+          streamRef.current = null;
         }
-
-        const recognition = new SpeechRecognition();
-        recognitionRef.current = recognition;
-        recognition.lang = "es-ES";
-        recognition.continuous = true;
-        recognition.interimResults = true;
-
-        recognition.onresult = (event: any) => {
-          let finalText = "";
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            const res = event.results[i];
-            if (res.isFinal) {
-              finalText += res[0].transcript;
-            }
-          }
-          if (finalText) {
-            setInputValue((prev) => (prev ? prev + " " : "") + finalText.trim());
-          }
-        };
-
-        recognition.start();
-        setIsRecording(true);
-
-        if (recordTimerRef.current) {
-          clearTimeout(recordTimerRef.current);
+        setIsTranscribing(true);
+        const text = await transcribeAudio(blob, { language: 'es' });
+        setIsTranscribing(false);
+        if (text && text.trim()) {
+          onTranscript(text.trim());
+        } else {
+          alert('No se pudo transcribir el audio.');
         }
-        recordTimerRef.current = window.setTimeout(() => {
-          try { recognition.stop(); } catch {}
-          setIsRecording(false);
-          if (audioStream) {
-            audioStream.getTracks().forEach((track) => track.stop());
-            setAudioStream(null);
-          }
-          if (inputValue.trim()) {
-            onTranscript(inputValue);
-            setInputValue("");
-          }
-        }, MAX_RECORDING_MS);
-      } catch (error) {
-        console.error("Error accessing microphone:", error);
-        alert("No se pudo acceder al micrófono. Verifica los permisos del navegador.");
-      }
-    } else {
-      if (recordTimerRef.current) {
-        clearTimeout(recordTimerRef.current);
-        recordTimerRef.current = null;
-      }
-      if (recognitionRef.current) try { recognitionRef.current.stop(); } catch {}
-      if (audioStream) {
-        audioStream.getTracks().forEach((track) => track.stop());
-        setAudioStream(null);
-      }
-      setIsRecording(false);
-      if (inputValue.trim()) {
-        onTranscript(inputValue);
-        setInputValue("");
-      }
+      };
+
+      mr.start();
+      setIsRecording(true);
+      if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = window.setTimeout(() => {
+        try { mr.stop(); } catch {}
+        setIsRecording(false);
+      }, MAX_RECORDING_MS);
+    } catch (err) {
+      console.error('getUserMedia error', err);
+      alert('No se pudo acceder al micrófono. Verifica permisos y que el sitio esté en HTTPS.');
     }
+  };
+
+  const stopRecording = () => {
+    if (stopTimerRef.current) {
+      clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = null;
+    }
+    try { mediaRecorderRef.current?.stop(); } catch {}
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+    setIsRecording(false);
   };
 
   return (
@@ -107,25 +108,21 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
       <div className="ai-head">
         <Typography variant="subtitle1">Entrada por voz</Typography>
         <IconButton
-          color={isRecording ? "error" : "primary"}
+          color={isRecording ? 'error' : 'primary'}
           size="small"
-          aria-label={isRecording ? "Detener grabación" : "Iniciar grabación"}
-          onClick={handleVoiceInput}
+          aria-label={isRecording ? 'Detener grabación' : 'Iniciar grabación'}
+          onClick={isRecording ? stopRecording : startRecording}
+          disabled={isTranscribing}
         >
           {isRecording ? <StopCircleIcon /> : <MicIcon />}
         </IconButton>
       </div>
       <div className="ai-voice">
-        <Typography variant="body2" color={isRecording ? "error" : "textSecondary"}>
-          {isRecording ? "Grabando... (haz clic para detener)" : "Haz clic en el micrófono para empezar"}
+        <Typography variant="body2" color={isRecording ? 'error' : 'textSecondary'}>
+          {isRecording ? 'Grabando 10 segundos... (haz clic para detener)' : 'Haz clic en el micrófono para grabar 10s'}
         </Typography>
-        {isRecording && (
-          <Input
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Escribe o habla aquí..."
-            fullWidth
-          />
+        {isTranscribing && (
+          <Typography variant="body2" style={{ color: '#00d1b2' }}>Procesando audio...</Typography>
         )}
       </div>
     </Paper>
@@ -148,8 +145,7 @@ const AudioIAPage: React.FC = () => {
   const applyAll = async (list: ActionSuggestion[]) => {
     for (const s of list) {
       applySuggestion(s);
-      // ligera pausa para que el diagrama procese eventos secuenciales
-      await new Promise(r => setTimeout(r, 60));
+      await new Promise((r) => setTimeout(r, 60));
     }
   };
 
