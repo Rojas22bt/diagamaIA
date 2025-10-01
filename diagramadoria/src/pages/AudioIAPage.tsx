@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef, useEffect } from "react";
 import { Typography, Paper, Tabs, Tab, IconButton, Input } from "@mui/material";
 import MicIcon from "@mui/icons-material/Mic";
 import StopCircleIcon from "@mui/icons-material/StopCircle";
@@ -11,16 +11,94 @@ interface AudioRecorderProps {
 function AudioRecorder({ onTranscript }: AudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [inputValue, setInputValue] = useState("");
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const recordTimerRef = useRef<number | null>(null);
+  const MAX_RECORDING_MS = 7000; // 7 segundos
 
-  const startRecording = () => {
-    setIsRecording(true);
-  };
+  useEffect(() => {
+    return () => {
+      if (audioStream) {
+        audioStream.getTracks().forEach((track) => track.stop());
+      }
+      if (recordTimerRef.current) {
+        clearTimeout(recordTimerRef.current);
+        recordTimerRef.current = null;
+      }
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+      }
+    };
+  }, [audioStream]);
 
-  const stopRecording = () => {
-    setIsRecording(false);
-    if (inputValue.trim()) {
-      onTranscript(inputValue);
-      setInputValue("");
+  const handleVoiceInput = async () => {
+    if (!isRecording) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        setAudioStream(stream);
+
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+          alert("El reconocimiento de voz no está disponible en este navegador.");
+          return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognitionRef.current = recognition;
+        recognition.lang = "es-ES";
+        recognition.continuous = true;
+        recognition.interimResults = true;
+
+        recognition.onresult = (event: any) => {
+          let finalText = "";
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const res = event.results[i];
+            if (res.isFinal) {
+              finalText += res[0].transcript;
+            }
+          }
+          if (finalText) {
+            setInputValue((prev) => (prev ? prev + " " : "") + finalText.trim());
+          }
+        };
+
+        recognition.start();
+        setIsRecording(true);
+
+        if (recordTimerRef.current) {
+          clearTimeout(recordTimerRef.current);
+        }
+        recordTimerRef.current = window.setTimeout(() => {
+          try { recognition.stop(); } catch {}
+          setIsRecording(false);
+          if (audioStream) {
+            audioStream.getTracks().forEach((track) => track.stop());
+            setAudioStream(null);
+          }
+          if (inputValue.trim()) {
+            onTranscript(inputValue);
+            setInputValue("");
+          }
+        }, MAX_RECORDING_MS);
+      } catch (error) {
+        console.error("Error accessing microphone:", error);
+        alert("No se pudo acceder al micrófono. Verifica los permisos del navegador.");
+      }
+    } else {
+      if (recordTimerRef.current) {
+        clearTimeout(recordTimerRef.current);
+        recordTimerRef.current = null;
+      }
+      if (recognitionRef.current) try { recognitionRef.current.stop(); } catch {}
+      if (audioStream) {
+        audioStream.getTracks().forEach((track) => track.stop());
+        setAudioStream(null);
+      }
+      setIsRecording(false);
+      if (inputValue.trim()) {
+        onTranscript(inputValue);
+        setInputValue("");
+      }
     }
   };
 
@@ -32,7 +110,7 @@ function AudioRecorder({ onTranscript }: AudioRecorderProps) {
           color={isRecording ? "error" : "primary"}
           size="small"
           aria-label={isRecording ? "Detener grabación" : "Iniciar grabación"}
-          onClick={isRecording ? stopRecording : startRecording}
+          onClick={handleVoiceInput}
         >
           {isRecording ? <StopCircleIcon /> : <MicIcon />}
         </IconButton>
