@@ -33,6 +33,21 @@ const ChatBotPage: React.FC = () => {
     setSending(true);
     setMessages(prev => [...prev, { role: 'user', content: userText }]);
     try {
+      // Regla especial: responder cómo ejecutar el backend en localhost
+      const normalize = (s: string) => s
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+      const q = normalize(userText);
+      const mentionsBackend = q.includes('backend') || q.includes('back end');
+      const mentionsLocal = q.includes('localhost') || q.includes('local host') || q.includes('local');
+      const mentionsRun = q.includes('funcionar') || q.includes('iniciar') || q.includes('levantar')
+        || q.includes('arrancar') || q.includes('ejecutar') || q.includes('correr') || q.includes('run');
+      if (mentionsBackend && mentionsLocal && mentionsRun) {
+        const fixedAnswer = 'Debes abrir el backend en visual studio code, esperar almenos 1 minuto para cargar el backend y luego ingresar el siguiente comando: mvn clean spring-boot:run';
+        setMessages(prev => [...prev, { role: 'assistant', content: fixedAnswer }]);
+        return;
+      }
+
       let aiJson: any | null = null;
       if (hasOpenAI) {
         aiJson = await suggestActionFromText(userText);
