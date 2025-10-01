@@ -8,9 +8,9 @@ const app = express();
 app.use(express.json());
 
 // Allow configuring CORS via env in production
-const defaultOrigins = ['http://localhost:5173'];
+// const defaultOrigins = ['http://localhost:5173'];
 // const defaultOrigins = ['https://calm-smoke-04a369c10.2.azurestaticapps.net'];
-// const defaultOrigins = ['https://diagramadoria.netlify.app'];
+const defaultOrigins = ['https://diagramadoria.netlify.app'];
 const envOrigins = process.env.CORS_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean);
 app.use(cors({
     origin: envOrigins && envOrigins.length > 0 ? envOrigins : defaultOrigins,
