@@ -4032,7 +4032,7 @@ const handleUpload = () => {
                             </div>
                         </div>
 
-                        {/* Área de arrastrar y soltar */}
+                        {/* Área de arrastrar y soltare */}
                         <div className="p-6">
                             <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-blue-400 rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors">
                                 <div className="flex flex-col items-center justify-center pt-5 pb-6">
