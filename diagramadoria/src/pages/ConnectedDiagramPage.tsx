@@ -4028,7 +4028,6 @@ const ConnectedDiagramPage: React.FC = () => {
                     </div>
                 )}
             </section>
-<<<<<<< HEAD
 
             {/* Modal de Importar Imagen */}
             <ImportImageModal
@@ -4037,77 +4036,6 @@ const ConnectedDiagramPage: React.FC = () => {
                 onUpload={handleUploadImage}
                 onAnalyzeWithAI={handleAnalyzeImageWithAI}
             />
-=======
-            {showImportImageModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 transition-all duration-300">
-                    <div className="bg-white rounded-2xl w-full max-w-lg mx-auto relative flex flex-col border border-blue-200 overflow-hidden">
-                        {/* Header */}
-                        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-blue-500 to-blue-600">
-                            <div className="flex items-center gap-2">
-                                <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5jYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjEgMTJ2N2EyIDIgMCAwIDEtMiAySDVhMiAyIDAgMCAxLTItMlY1YTIgMiAwIDAgMSAyLTJoMTEiPjwvcGF0aD48cG9seWxpbmUgcG9pbnRzPSIxNyAxIDIxIDUgMTcgOSI+PC9wb2x5bGluZT48bGluZSB4MT0iMyIgeTE9IjE1IiB4Mj0iMTciIHkyPSIxNSI+PC9saW5lPjwvc3ZnPg==" 
-                                    alt="" className="w-6 h-6" />
-                                <h2 className="text-xl font-semibold text-white">
-                                    Importar Imagen
-                                </h2>
-                            </div>
-                        </div>
-
-                        {/* Área de arrastrar y soltare */}
-                        <div className="p-6">
-                            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-blue-400 rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors">
-                                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                    <svg className="w-10 h-10 mb-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-                                    </svg>
-                                    <p className="mb-2 text-sm text-blue-600">
-                                        <span className="font-semibold">Click para seleccionar</span> o arrastra una imagen
-                                    </p>
-                                    <p className="text-xs text-blue-500">PNG, JPG, GIF hasta 10MB</p>
-                                </div>
-                                <input type="file" 
-                                    className="hidden" 
-                                    accept="image/*" 
-                                    onChange={handleImageChange} 
-                                />
-                            </label>
-
-                            {/* Preview */}
-                            {previewUrl && (
-                                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                                    <img 
-                                        src={previewUrl} 
-                                        alt="Preview" 
-                                        className="max-h-[200px] mx-auto object-contain rounded-lg" 
-                                    />
-                                    {selectedImage && (
-                                        <p className="mt-2 text-center text-sm text-gray-500">
-                                            {selectedImage.name} ({(selectedImage.size / 1024).toFixed(2)} KB)
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Botones de acción */}
-                        <div className="flex border-t border-gray-200">
-                            <button
-                                onClick={handleUpload}
-                                disabled={!selectedImage}
-                                className="flex-1 px-6 py-3 bg-blue-500 text-white font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-                            >
-                                Subir Imagen
-                            </button>
-                            <button
-                                onClick={() => { setShowImportImageModal(false); setSelectedImage(null); setPreviewUrl(null); }}
-                                className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors duration-200"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
->>>>>>> 68aa817d7cc9e37b64a700a06497f08b20004ec2
         </div>
     )
 }
