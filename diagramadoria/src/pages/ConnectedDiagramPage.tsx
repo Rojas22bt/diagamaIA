@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import * as joint from 'jointjs'
-import { FcReddit,  FcDeleteDatabase } from "react-icons/fc"
+import { FcReddit, FcDeleteDatabase } from "react-icons/fc"
 import { FaPlus, FaRegLightbulb } from 'react-icons/fa'
 import { FiDownload, FiUpload } from 'react-icons/fi';
 import { saveAs } from 'file-saver';
@@ -102,7 +102,7 @@ const ConnectedDiagramPage: React.FC = () => {
     const [openRelReco, setOpenRelReco] = useState<boolean>(false);
     const [relRecoLoading, setRelRecoLoading] = useState<boolean>(false);
     const [relRecoList, setRelRecoList] = useState<RelationSuggestion[]>([]);
-    const [collabDraft, setCollabDraft] = useState<{name: string; email: string; role: 'editor' | 'vista'}>({name: '', email: '', role: 'editor'});
+    const [collabDraft, setCollabDraft] = useState<{ name: string; email: string; role: 'editor' | 'vista' }>({ name: '', email: '', role: 'editor' });
     // Colaboradores desde el backend (sincronizados)
     type ServerCollab = { userId: number; name: string; email: string; role: 'editor' | 'vista'; isCreator?: boolean };
     const [serverCollabs, setServerCollabs] = useState<ServerCollab[]>([]);
@@ -113,6 +113,28 @@ const ConnectedDiagramPage: React.FC = () => {
         const pid = getActiveProjectId();
         return pid ? getActivities(pid) : [];
     });
+    const [showImportImageModal, setShowImportImageModal] = useState(false);
+const [selectedImage, setSelectedImage] = useState<File | null>(null);
+const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    setSelectedImage(file);
+    if (file) {
+        setPreviewUrl(URL.createObjectURL(file));
+    } else {
+        setPreviewUrl(null);
+    }
+};
+
+const handleUpload = () => {
+    if (selectedImage) {
+        alert('Imagen subida: ' + selectedImage.name);
+        setShowImportImageModal(false);
+        setSelectedImage(null);
+        setPreviewUrl(null);
+    }
+};
     // Helper para mostrar etiqueta de usuario (preferir correo sobre nombre/ID)
     const getUserDisplay = (userId?: number) => {
         // Si no tenemos ID, intenta usar el usuario local (puede ser yo mismo)
@@ -124,7 +146,7 @@ const ConnectedDiagramPage: React.FC = () => {
                 if (!userId && myEmail) return String(myEmail);
                 if (me?.id === userId) return String(myEmail || me?.nombre || me?.name || me?.username || 'Usuario');
             }
-        } catch {}
+        } catch { }
         if (typeof userId === 'number') {
             const found = serverCollabs.find(c => c.userId === userId);
             if (found) return String(found.email || found.name || 'Usuario');
@@ -178,13 +200,13 @@ const ConnectedDiagramPage: React.FC = () => {
     // Auto-save when classes or relations change (but not when applying remote changes)
     useEffect(() => {
         console.log('useEffect autosave triggered. Classes:', classes.length, 'Relations:', relations.length, 'applyingRemote:', applyingRemoteRef.current, 'graph:', !!graph, 'paper:', !!paper);
-        
+
         // Don't auto-save if we're applying remote changes
         if (applyingRemoteRef.current) {
             console.log('Skipping autosave - applying remote changes');
             return;
         }
-        
+
         // Only save if we have actual content and we're not in an initial load state
         if ((classes.length > 0 || relations.length > 0) && graph && paper) {
             console.log('State changed, scheduling autosave... Classes:', classes.length, 'Relations:', relations.length);
@@ -202,7 +224,7 @@ const ConnectedDiagramPage: React.FC = () => {
                     const s = (c.element as any).size();
                     size = { width: s.width, height: s.height };
                 }
-            } catch {}
+            } catch { }
             return {
                 id: `c-${c.displayId}`,
                 displayId: c.displayId,
@@ -233,15 +255,15 @@ const ConnectedDiagramPage: React.FC = () => {
         try {
             // Only send updates if not applying remote changes
             if (applyingRemoteRef.current) return;
-            
+
             if (saveDebounceRef.current) window.clearTimeout(saveDebounceRef.current);
             const pidRaw = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
             if (!pidRaw) return;
-            
+
             saveDebounceRef.current = window.setTimeout(() => {
                 // Double check we're not in the middle of applying remote changes
                 if (applyingRemoteRef.current) return;
-                
+
                 const fullModel = buildModelForAutosave();
                 const payload: DiagramUpdate = {
                     projectId: pidRaw,
@@ -251,11 +273,11 @@ const ConnectedDiagramPage: React.FC = () => {
                     elementId: undefined,
                     timestamp: new Date().toISOString()
                 };
-                
+
                 console.log('Enviando autosave para proyecto:', pidRaw);
-                try { 
+                try {
                     if (socketService.isConnected()) {
-                        socketService.sendDiagramUpdate(payload); 
+                        socketService.sendDiagramUpdate(payload);
                     } else {
                         console.warn('Socket no conectado, no se puede enviar autosave');
                     }
@@ -276,7 +298,7 @@ const ConnectedDiagramPage: React.FC = () => {
     ): Array<{ name: string; type: string }> => {
         const norm = (s: string) => s.toLowerCase().replace(/\s+/g, '').replace(/_/g, '');
         const classSet = new Set(allClassNames.map(norm));
-    // const self = norm(currentClassName); // reservado para posibles reglas futuras
+        // const self = norm(currentClassName); // reservado para posibles reglas futuras
 
         const isForeignKeyName = (attrName: string) => {
             const n = norm(attrName);
@@ -317,7 +339,7 @@ const ConnectedDiagramPage: React.FC = () => {
         }
 
         // 4) si el atributo 'id' existe pero sin tipo, darle uno por defecto
-        filtered = filtered.map(a => norm(a.name) === 'id' ? { name: a.name, type: a.type?.trim() || 'Int' } : { name: a.name, type: a.type } );
+        filtered = filtered.map(a => norm(a.name) === 'id' ? { name: a.name, type: a.type?.trim() || 'Int' } : { name: a.name, type: a.type });
 
         return filtered;
     };
@@ -341,9 +363,9 @@ const ConnectedDiagramPage: React.FC = () => {
         ];
         const normalizedAttrs = normalizeSuggestedClassAttributes(name, (suggestion.attributes || []), allNames);
         const attributes = normalizedAttrs.map(a => `${a.name}: ${a.type}`);
-    const methods: string[] = [];
+        const methods: string[] = [];
 
-    const labelText = `${name}\n-----------------------\n${attributes.join('\n')}`;
+        const labelText = `${name}\n-----------------------\n${attributes.join('\n')}`;
         const fontSize = 12;
         const paddingX = 20; const paddingY = 30;
         const lines = labelText.split('\n');
@@ -365,17 +387,19 @@ const ConnectedDiagramPage: React.FC = () => {
             { tagName: 'text', selector: 'label' },
             { tagName: 'rect', selector: 'idBg' },
             { tagName: 'text', selector: 'idBadge' },
-            { tagName: 'g', children: [
-                { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
-                { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
-            ]}
+            {
+                tagName: 'g', children: [
+                    { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
+                    { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
+                ]
+            }
         ];
         rect.addTo(graph);
         clampElementInside(rect);
 
-    setClasses(prev => [...prev, { id, name, x, y, displayId, attributes, methods, element: rect }]);
-    // Asegurar avance del contador (evita duplicados en inserciones rápidas o en lote)
-    setNextNumber(n => Math.max(n, displayId + 1));
+        setClasses(prev => [...prev, { id, name, x, y, displayId, attributes, methods, element: rect }]);
+        // Asegurar avance del contador (evita duplicados en inserciones rápidas o en lote)
+        setNextNumber(n => Math.max(n, displayId + 1));
 
         const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
         if (pidNum) {
@@ -386,10 +410,10 @@ const ConnectedDiagramPage: React.FC = () => {
             try {
                 const newNode: UMLClassNode = { id: `c-${displayId}`, displayId, name, position: { x, y }, size: { width, height }, attributes: attributes.map((line: string) => parseAttrString(line)), methods: [] };
                 const payload: DiagramUpdate = { projectId: pidNum, userId: Number(localStorage.getItem('userId') || 0), diagramData: { node: newNode }, changeType: 'create_class', elementId: displayId, timestamp: new Date().toISOString() };
-                try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch {}
+                try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch { }
                 socketService.sendDiagramUpdate(payload);
                 scheduleAutoSave();
-            } catch {}
+            } catch { }
         }
     };
 
@@ -465,7 +489,7 @@ const ConnectedDiagramPage: React.FC = () => {
             drawGrid: true,
             background: { color: '#fdfdfd' },
             // Interactividad dependiente del rol: vista = solo lectura
-            interactive: function(this: any) {
+            interactive: function (this: any) {
                 const canEdit = roleRef.current === 'creador' || roleRef.current === 'editor';
                 if (!canEdit) return false;
                 // Habilitar movimientos/edición estándar cuando se puede editar
@@ -481,88 +505,88 @@ const ConnectedDiagramPage: React.FC = () => {
             },
         });
 
-    setGraph(g);
+        setGraph(g);
         setPaper(paperInstance);
         graphRef.current = g;
         paperRef.current = paperInstance;
 
-    // connect socket if token available
-    try {
-        const token = localStorage.getItem('token');
-        if (token) {
-            console.log('Inicializando conexión WebSocket...');
-            socketService.connect(token);
-            
-            // Join immediately if already connected (navigation from another page)
-            if (projectId && socketService.isConnected()) {
-                console.log('Socket ya conectado, uniéndose al proyecto...');
-                socketService.joinProject(Number(projectId));
-            }
-            
-            // also join on future connects (first time or reconnects)
-            const onConnect = () => {
-                console.log('Socket conectado, uniéndose al proyecto:', projectId);
-                if (projectId) {
-                    setTimeout(() => {
-                        socketService.joinProject(Number(projectId));
-                    }, 100); // Small delay to ensure connection is stable
+        // connect socket if token available
+        try {
+            const token = localStorage.getItem('token');
+            if (token) {
+                console.log('Inicializando conexión WebSocket...');
+                socketService.connect(token);
+
+                // Join immediately if already connected (navigation from another page)
+                if (projectId && socketService.isConnected()) {
+                    console.log('Socket ya conectado, uniéndose al proyecto...');
+                    socketService.joinProject(Number(projectId));
                 }
-            };
-            
-            socketService.on('connect', onConnect);
-            
-            // Handle connection errors
-            socketService.on('connect_error', (error: any) => {
-                console.error('Error de conexión WebSocket:', error);
-            });
-            
-            // Handle project join confirmation
-            socketService.on('joined-project', (joinedProjectId: number) => {
-                console.log('Confirmación: Unido al proyecto', joinedProjectId);
-            });
 
-            // Notificar en actividades cuando un usuario entra o sale del proyecto
-            socketService.on('user-joined', (payload: any) => {
-                try {
-                    const pid = projectId ? Number(projectId) : undefined;
-                    if (!pid) return;
-                    if (payload?.projectId && payload.projectId !== pid) return;
-                    const selfId = Number(localStorage.getItem('userId') || 0);
-                    if (payload?.userId === selfId) return; // no registrar mi propio ingreso
-                    const display = payload?.email || payload?.userEmail || payload?.correo || payload?.name || payload?.userName || getUserDisplay(payload?.userId);
-                    addActivity(String(pid), { type: 'user_joined', message: `${display} se unió al proyecto`, byUserId: payload?.userId, byName: display });
-                    setActivities(getActivities(String(pid)));
-                } catch {}
-            });
-            socketService.on('user-left', (payload: any) => {
-                try {
-                    const pid = projectId ? Number(projectId) : undefined;
-                    if (!pid) return;
-                    if (payload?.projectId && payload.projectId !== pid) return;
-                    const selfId = Number(localStorage.getItem('userId') || 0);
-                    if (payload?.userId === selfId) return; // no registrar mi propia salida
-                    const display = payload?.email || payload?.userEmail || payload?.correo || payload?.name || payload?.userName || getUserDisplay(payload?.userId);
-                    addActivity(String(pid), { type: 'user_left', message: `${display} salió del proyecto`, byUserId: payload?.userId, byName: display });
-                    setActivities(getActivities(String(pid)));
-                } catch {}
-            });
-            
-            // clean listener on unmount
-            (paperInstance as any).__socketOnConnect = onConnect;
-        } else {
-            console.warn('No hay token disponible para conectar WebSocket');
+                // also join on future connects (first time or reconnects)
+                const onConnect = () => {
+                    console.log('Socket conectado, uniéndose al proyecto:', projectId);
+                    if (projectId) {
+                        setTimeout(() => {
+                            socketService.joinProject(Number(projectId));
+                        }, 100); // Small delay to ensure connection is stable
+                    }
+                };
+
+                socketService.on('connect', onConnect);
+
+                // Handle connection errors
+                socketService.on('connect_error', (error: any) => {
+                    console.error('Error de conexión WebSocket:', error);
+                });
+
+                // Handle project join confirmation
+                socketService.on('joined-project', (joinedProjectId: number) => {
+                    console.log('Confirmación: Unido al proyecto', joinedProjectId);
+                });
+
+                // Notificar en actividades cuando un usuario entra o sale del proyecto
+                socketService.on('user-joined', (payload: any) => {
+                    try {
+                        const pid = projectId ? Number(projectId) : undefined;
+                        if (!pid) return;
+                        if (payload?.projectId && payload.projectId !== pid) return;
+                        const selfId = Number(localStorage.getItem('userId') || 0);
+                        if (payload?.userId === selfId) return; // no registrar mi propio ingreso
+                        const display = payload?.email || payload?.userEmail || payload?.correo || payload?.name || payload?.userName || getUserDisplay(payload?.userId);
+                        addActivity(String(pid), { type: 'user_joined', message: `${display} se unió al proyecto`, byUserId: payload?.userId, byName: display });
+                        setActivities(getActivities(String(pid)));
+                    } catch { }
+                });
+                socketService.on('user-left', (payload: any) => {
+                    try {
+                        const pid = projectId ? Number(projectId) : undefined;
+                        if (!pid) return;
+                        if (payload?.projectId && payload.projectId !== pid) return;
+                        const selfId = Number(localStorage.getItem('userId') || 0);
+                        if (payload?.userId === selfId) return; // no registrar mi propia salida
+                        const display = payload?.email || payload?.userEmail || payload?.correo || payload?.name || payload?.userName || getUserDisplay(payload?.userId);
+                        addActivity(String(pid), { type: 'user_left', message: `${display} salió del proyecto`, byUserId: payload?.userId, byName: display });
+                        setActivities(getActivities(String(pid)));
+                    } catch { }
+                });
+
+                // clean listener on unmount
+                (paperInstance as any).__socketOnConnect = onConnect;
+            } else {
+                console.warn('No hay token disponible para conectar WebSocket');
+            }
+        } catch (err) {
+            console.error('Error inicializando WebSocket:', err);
         }
-    } catch (err) {
-        console.error('Error inicializando WebSocket:', err);
-    }
 
-    paperInstance.on('element:pointerclick', function(cellView: any, evt: any) {
+        paperInstance.on('element:pointerclick', function (cellView: any, evt: any) {
             const target = evt.target as Element;
             const isEdit = !!(target && (target as Element).closest && (target as Element).closest('.edit-btn'));
             const isDelete = !!(target && (target as Element).closest && (target as Element).closest('.delete-btn'));
 
             if (isEdit) {
-        if (!(roleRef.current === 'creador' || roleRef.current === 'editor')) return;
+                if (!(roleRef.current === 'creador' || roleRef.current === 'editor')) return;
                 // Abrir modal edición
                 const element = cellView.model;
                 const labelText = element.attr('label/text') as string;
@@ -616,737 +640,741 @@ const ConnectedDiagramPage: React.FC = () => {
                             if (belongs) l.remove();
                         });
                         suppressLinkEmitRef.current = false;
-                    } catch {}
+                    } catch { }
                 }
                 setEditModal(editModal => ({ ...editModal, visible: false }));
                 // No emitir aquí para evitar duplicado; onRemove (element) ya emite delete_element
             }
         });
-    // Broadcast selection when user starts interacting
-    paperInstance.on('element:pointerdown', function(cellView: any) {
-        try {
-            const pid = projectId ? Number(projectId) : undefined;
-            if (!pid) return;
-            const cls = classesRef.current.find(c => c.element === cellView.model);
-            const displayId = cls?.displayId;
-            if (displayId !== undefined) {
-                socketService.sendElementSelect({ projectId: pid, elementId: displayId, elementType: 'class' });
-            }
-        } catch {}
-    });
+        // Broadcast selection when user starts interacting
+        paperInstance.on('element:pointerdown', function (cellView: any) {
+            try {
+                const pid = projectId ? Number(projectId) : undefined;
+                if (!pid) return;
+                const cls = classesRef.current.find(c => c.element === cellView.model);
+                const displayId = cls?.displayId;
+                if (displayId !== undefined) {
+                    socketService.sendElementSelect({ projectId: pid, elementId: displayId, elementType: 'class' });
+                }
+            } catch { }
+        });
 
-    // Handle clicks on relation delete buttons
-    paperInstance.on('link:pointerclick', function(linkView: any, evt: any) {
-        const target = evt.target as Element;
-        const isDeleteRelation = !!(target && (target as Element).closest && (target as Element).closest('.delete-relation-btn'));
-        
-        if (isDeleteRelation) {
-            // Verificar permisos
-            if (!(roleRef.current === 'creador' || roleRef.current === 'editor')) return;
-            
-            const link = linkView.model;
-            const sourceElement = link.getSourceElement();
-            const targetElement = link.getTargetElement();
-            
-            if (sourceElement && targetElement) {
-                try {
-                    // Encontrar las clases correspondientes
-                    const sourceClass = classesRef.current.find(c => c.element === sourceElement);
-                    const targetClass = classesRef.current.find(c => c.element === targetElement);
-                    
-                    if (sourceClass && targetClass) {
-                        // Eliminar del graph
-                        suppressLinkEmitRef.current = true;
-                        link.remove();
-                        suppressLinkEmitRef.current = false;
-                        
-                        // Eliminar del estado de relaciones
-                        setRelations(prev => prev.filter(r => 
-                            !((r.fromDisplayId === sourceClass.displayId && r.toDisplayId === targetClass.displayId) ||
-                              (r.fromDisplayId === targetClass.displayId && r.toDisplayId === sourceClass.displayId))
-                        ));
-                        
-                        // Registrar actividad y broadcast
-                        const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
-                        if (pidNum) {
-                            const selfId = Number(localStorage.getItem('userId') || 0);
-                            const selfName = getUserDisplay(selfId);
-                            addActivity(String(pidNum), { 
-                                type: 'delete_relation', 
-                                message: `${selfName} eliminó relación entre #${sourceClass.displayId} (${sourceClass.name}) y #${targetClass.displayId} (${targetClass.name})`, 
-                                byUserId: selfId, 
-                                byName: selfName 
-                            });
-                            setActivities(getActivities(String(pidNum)));
-                            
-                            try {
+        // Handle clicks on relation delete buttons
+        paperInstance.on('link:pointerclick', function (linkView: any, evt: any) {
+            const target = evt.target as Element;
+            const isDeleteRelation = !!(target && (target as Element).closest && (target as Element).closest('.delete-relation-btn'));
+
+            if (isDeleteRelation) {
+                // Verificar permisos
+                if (!(roleRef.current === 'creador' || roleRef.current === 'editor')) return;
+
+                const link = linkView.model;
+                const sourceElement = link.getSourceElement();
+                const targetElement = link.getTargetElement();
+
+                if (sourceElement && targetElement) {
+                    try {
+                        // Encontrar las clases correspondientes
+                        const sourceClass = classesRef.current.find(c => c.element === sourceElement);
+                        const targetClass = classesRef.current.find(c => c.element === targetElement);
+
+                        if (sourceClass && targetClass) {
+                            // Eliminar del graph
+                            suppressLinkEmitRef.current = true;
+                            link.remove();
+                            suppressLinkEmitRef.current = false;
+
+                            // Eliminar del estado de relaciones
+                            setRelations(prev => prev.filter(r =>
+                                !((r.fromDisplayId === sourceClass.displayId && r.toDisplayId === targetClass.displayId) ||
+                                    (r.fromDisplayId === targetClass.displayId && r.toDisplayId === sourceClass.displayId))
+                            ));
+
+                            // Registrar actividad y broadcast
+                            const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
+                            if (pidNum) {
                                 const selfId = Number(localStorage.getItem('userId') || 0);
-                                const payload = {
-                                    projectId: pidNum,
-                                    userId: selfId,
-                                    diagramData: {
-                                        fromDisplayId: sourceClass.displayId,
-                                        toDisplayId: targetClass.displayId,
-                                        fromName: sourceClass.name,
-                                        toName: targetClass.name
-                                    },
-                                    changeType: 'delete_relation',
-                                    elementId: `${sourceClass.displayId}-${targetClass.displayId}`,
-                                    timestamp: new Date().toISOString()
-                                };
-                                socketService.sendDiagramUpdate(payload);
-                            } catch {}
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error eliminando relación:', error);
-                }
-            }
-        }
-    });
-
-    // Listen for remote diagram updates
-    socketService.on('diagram-updated', (data: any) => {
-        try {
-            console.log('Received diagram update:', data);
-            if (!data) {
-                console.log('No data in update');
-                return;
-            }
-            // Use refs to avoid stale state in closure
-            const gInst = graphRef.current;
-            const pInst = paperRef.current;
-            if (!gInst || !pInst) {
-                console.log('Graph or paper not available yet');
-                return;
-            }
-            
-            // Ignore updates from ourselves
-            const currentUserId = Number(localStorage.getItem('userId') || 0);
-            if (data.userId === currentUserId) {
-                console.log('Ignoring update from self');
-                return;
-            }
-            
-            // If update comes from other user, render model
-            const incoming = data.diagramData;
-            if (!incoming) {
-                console.log('No diagram data in update');
-                return;
-            }
-            
-            // If it's our project
-            const pid = projectId ? Number(projectId) : undefined;
-            if (pid && data.projectId === pid) {
-                console.log('Applying remote update for project:', pid, 'changeType:', data.changeType);
-                console.log('Current graph elements count:', gInst.getElements().length);
-                console.log('Incoming data structure:', incoming);
-                // Ignore autosave for rendering (it's for persistence only)
-                if (data.changeType === 'autosave') {
-                    return;
-                }
-
-                // Registrar actividad de cambios remotos con autor y tipo
-                try {
-                    const actorName = (data as any)?.userEmail || (data as any)?.email || (data as any)?.userName || getUserDisplay((data as any)?.userId);
-                    let msg = '';
-                    switch (data.changeType) {
-                        case 'move': {
-                            const d = incoming as any;
-                            if (d && typeof d.displayId === 'number') msg = `movió clase #${d.displayId}`; else msg = 'movió elementos';
-                            break;
-                        }
-                        case 'create_class': {
-                            const n = (incoming as any)?.node;
-                            msg = n ? `creó clase #${n.displayId} (${n.name || 'Clase'})` : 'creó una clase';
-                            break;
-                        }
-                        case 'create_relation': {
-                            const r = (incoming as any)?.relation;
-                            msg = r ? `creó relación ${r.type || ''} #${r.fromDisplayId}→#${r.toDisplayId}` : 'creó una relación';
-                            break;
-                        }
-                        case 'delete_relation': {
-                            const r = incoming as any;
-                            msg = (r && r.fromDisplayId != null && r.toDisplayId != null) ? `eliminó relación #${r.fromDisplayId}↔#${r.toDisplayId}` : 'eliminó una relación';
-                            break;
-                        }
-                        case 'edit_element': {
-                            const d = incoming as any;
-                            msg = d?.displayId != null ? `editó clase #${d.displayId}${d?.name ? ` (${d.name})` : ''}` : 'editó un elemento';
-                            break;
-                        }
-                        case 'delete_element': {
-                            const d = incoming as any;
-                            msg = d?.displayId != null ? `eliminó clase #${d.displayId}` : 'eliminó un elemento';
-                            break;
-                        }
-                        case 'import': {
-                            msg = 'importó un diagrama';
-                            break;
-                        }
-                        case 'edit_relation': {
-                            msg = 'editó una relación';
-                            break;
-                        }
-                        default: {
-                            msg = `realizó cambios (${data.changeType || 'desconocido'})`;
-                        }
-                    }
-                    addActivity(String(pid), { type: 'change', message: `${actorName} ${msg}`, byUserId: (data as any)?.userId, byName: actorName });
-                    setActivities(getActivities(String(pid)));
-                } catch {}
-                // Fast-path for move updates: only patch positions to avoid total re-render
-                if (data.changeType === 'move' && incoming && typeof incoming === 'object') {
-                    try {
-                        applyingRemoteRef.current = true;
-                        pInst.freeze();
-                        // Minimal payload support: { displayId, x, y }
-                        if (typeof (incoming as any).displayId === 'number' && typeof (incoming as any).x === 'number' && typeof (incoming as any).y === 'number') {
-                            const { displayId, x, y } = incoming as any;
-                            const updated: ClassType[] = classesRef.current.map(c => {
-                                if (c.displayId === displayId && c.element) {
-                                    try { (c.element as any).position(x, y); } catch {}
-                                    return { ...c, x, y };
-                                }
-                                return c;
-                            });
-                            setClasses(updated);
-                        } else if (Array.isArray((incoming as any).classes)) {
-                            const posMap = new Map<number, {x:number;y:number}>();
-                            (incoming.classes as any[]).forEach((c: any) => {
-                                if (typeof c?.displayId === 'number' && typeof c?.x === 'number' && typeof c?.y === 'number') {
-                                    posMap.set(c.displayId, { x: c.x, y: c.y });
-                                }
-                            });
-                            // Update elements positions directly
-                            const updated: ClassType[] = classesRef.current.map(c => {
-                                const u = posMap.get(c.displayId);
-                                if (u && c.element) {
-                                    try { (c.element as any).position(u.x, u.y); } catch {}
-                                    return { ...c, x: u.x, y: u.y };
-                                }
-                                return c;
-                            });
-                            setClasses(updated);
-                        }
-                        setTimeout(() => {
-                            try {
-                                pInst.unfreeze();
-                                // ensure views update
-                                gInst.getElements().forEach(el => {
-                                    const v = pInst.findViewByModel(el);
-                                    v?.update();
+                                const selfName = getUserDisplay(selfId);
+                                addActivity(String(pidNum), {
+                                    type: 'delete_relation',
+                                    message: `${selfName} eliminó relación entre #${sourceClass.displayId} (${sourceClass.name}) y #${targetClass.displayId} (${targetClass.name})`,
+                                    byUserId: selfId,
+                                    byName: selfName
                                 });
-                            } catch {}
-                            applyingRemoteRef.current = false;
-                        }, 50);
-                    } catch (e) {
-                        console.error('Error applying move update:', e);
-                        applyingRemoteRef.current = false;
+                                setActivities(getActivities(String(pidNum)));
+
+                                try {
+                                    const selfId = Number(localStorage.getItem('userId') || 0);
+                                    const payload = {
+                                        projectId: pidNum,
+                                        userId: selfId,
+                                        diagramData: {
+                                            fromDisplayId: sourceClass.displayId,
+                                            toDisplayId: targetClass.displayId,
+                                            fromName: sourceClass.name,
+                                            toName: targetClass.name
+                                        },
+                                        changeType: 'delete_relation',
+                                        elementId: `${sourceClass.displayId}-${targetClass.displayId}`,
+                                        timestamp: new Date().toISOString()
+                                    };
+                                    socketService.sendDiagramUpdate(payload);
+                                } catch { }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error eliminando relación:', error);
                     }
+                }
+            }
+        });
+
+        // Listen for remote diagram updates
+        socketService.on('diagram-updated', (data: any) => {
+            try {
+                console.log('Received diagram update:', data);
+                if (!data) {
+                    console.log('No data in update');
+                    return;
+                }
+                // Use refs to avoid stale state in closure
+                const gInst = graphRef.current;
+                const pInst = paperRef.current;
+                if (!gInst || !pInst) {
+                    console.log('Graph or paper not available yet');
                     return;
                 }
 
-                // Fast-path create_class: add only new class if payload matches
-                if (data.changeType === 'create_class' && incoming && typeof incoming === 'object') {
-                    try {
-                        applyingRemoteRef.current = true;
-                        pInst.freeze();
-                        if ((incoming as any).node && (incoming as any).node.displayId) {
-                            const node = (incoming as any).node as UMLClassNode;
-                            const newCls = addClassNode(node, gInst, roleRef.current === 'creador' || roleRef.current === 'editor');
-                            setClasses(prev => [...prev, newCls]);
-                            setNextNumber(n => Math.max(n, (node.displayId || 0) + 1));
-                        }
-                    } catch (e) { console.error('Error applying create_class:', e); }
-                    finally {
-                        try { pInst.unfreeze(); } catch {}
-                        applyingRemoteRef.current = false;
-                    }
+                // Ignore updates from ourselves
+                const currentUserId = Number(localStorage.getItem('userId') || 0);
+                if (data.userId === currentUserId) {
+                    console.log('Ignoring update from self');
                     return;
                 }
-                // Fast-path create_relation: add a single link if possible
-                if (data.changeType === 'create_relation' && incoming && typeof incoming === 'object') {
-                    try {
-                        applyingRemoteRef.current = true;
-                        pInst.freeze();
-                        if ((incoming as any).relation && (incoming as any).relation.fromDisplayId) {
-                            addRelationLink((incoming as any).relation as UMLRelation, gInst);
-                        }
-                    } catch (e) { console.error('Error applying create_relation:', e); }
-                    finally {
-                        try { pInst.unfreeze(); } catch {}
-                        applyingRemoteRef.current = false;
-                    }
+
+                // If update comes from other user, render model
+                const incoming = data.diagramData;
+                if (!incoming) {
+                    console.log('No diagram data in update');
                     return;
                 }
-                // Fast-path delete_relation: remove a single link if provided as minimal payload
-                if (data.changeType === 'delete_relation' && incoming && typeof incoming === 'object') {
+
+                // If it's our project
+                const pid = projectId ? Number(projectId) : undefined;
+                if (pid && data.projectId === pid) {
+                    console.log('Applying remote update for project:', pid, 'changeType:', data.changeType);
+                    console.log('Current graph elements count:', gInst.getElements().length);
+                    console.log('Incoming data structure:', incoming);
+                    // Ignore autosave for rendering (it's for persistence only)
+                    if (data.changeType === 'autosave') {
+                        return;
+                    }
+
+                    // Registrar actividad de cambios remotos con autor y tipo
                     try {
-                        applyingRemoteRef.current = true;
-                        pInst.freeze();
-                        const fromDisplayId = (incoming as any).fromDisplayId as number | undefined;
-                        const toDisplayId = (incoming as any).toDisplayId as number | undefined;
-                        if (typeof fromDisplayId === 'number' && typeof toDisplayId === 'number') {
-                            // Update state
-                            setRelations(prev => prev.filter(r => !(r.fromDisplayId === fromDisplayId && r.toDisplayId === toDisplayId)));
-                            // Remove the specific link from the graph
-                            try {
-                                const fromEl = classesRef.current.find(c => c.displayId === fromDisplayId)?.element as any;
-                                const toEl = classesRef.current.find(c => c.displayId === toDisplayId)?.element as any;
-                                if (fromEl && toEl) {
-                                    const links = (gInst as any).getLinks ? (gInst as any).getLinks() : [];
-                                    links.forEach((l: any) => {
-                                        const sId = l.get('source')?.id; const tId = l.get('target')?.id;
-                                        if (sId === fromEl.id && tId === toEl.id) l.remove();
+                        const actorName = (data as any)?.userEmail || (data as any)?.email || (data as any)?.userName || getUserDisplay((data as any)?.userId);
+                        let msg = '';
+                        switch (data.changeType) {
+                            case 'move': {
+                                const d = incoming as any;
+                                if (d && typeof d.displayId === 'number') msg = `movió clase #${d.displayId}`; else msg = 'movió elementos';
+                                break;
+                            }
+                            case 'create_class': {
+                                const n = (incoming as any)?.node;
+                                msg = n ? `creó clase #${n.displayId} (${n.name || 'Clase'})` : 'creó una clase';
+                                break;
+                            }
+                            case 'create_relation': {
+                                const r = (incoming as any)?.relation;
+                                msg = r ? `creó relación ${r.type || ''} #${r.fromDisplayId}→#${r.toDisplayId}` : 'creó una relación';
+                                break;
+                            }
+                            case 'delete_relation': {
+                                const r = incoming as any;
+                                msg = (r && r.fromDisplayId != null && r.toDisplayId != null) ? `eliminó relación #${r.fromDisplayId}↔#${r.toDisplayId}` : 'eliminó una relación';
+                                break;
+                            }
+                            case 'edit_element': {
+                                const d = incoming as any;
+                                msg = d?.displayId != null ? `editó clase #${d.displayId}${d?.name ? ` (${d.name})` : ''}` : 'editó un elemento';
+                                break;
+                            }
+                            case 'delete_element': {
+                                const d = incoming as any;
+                                msg = d?.displayId != null ? `eliminó clase #${d.displayId}` : 'eliminó un elemento';
+                                break;
+                            }
+                            case 'import': {
+                                msg = 'importó un diagrama';
+                                break;
+                            }
+                            case 'edit_relation': {
+                                msg = 'editó una relación';
+                                break;
+                            }
+                            default: {
+                                msg = `realizó cambios (${data.changeType || 'desconocido'})`;
+                            }
+                        }
+                        addActivity(String(pid), { type: 'change', message: `${actorName} ${msg}`, byUserId: (data as any)?.userId, byName: actorName });
+                        setActivities(getActivities(String(pid)));
+                    } catch { }
+                    // Fast-path for move updates: only patch positions to avoid total re-render
+                    if (data.changeType === 'move' && incoming && typeof incoming === 'object') {
+                        try {
+                            applyingRemoteRef.current = true;
+                            pInst.freeze();
+                            // Minimal payload support: { displayId, x, y }
+                            if (typeof (incoming as any).displayId === 'number' && typeof (incoming as any).x === 'number' && typeof (incoming as any).y === 'number') {
+                                const { displayId, x, y } = incoming as any;
+                                const updated: ClassType[] = classesRef.current.map(c => {
+                                    if (c.displayId === displayId && c.element) {
+                                        try { (c.element as any).position(x, y); } catch { }
+                                        return { ...c, x, y };
+                                    }
+                                    return c;
+                                });
+                                setClasses(updated);
+                            } else if (Array.isArray((incoming as any).classes)) {
+                                const posMap = new Map<number, { x: number; y: number }>();
+                                (incoming.classes as any[]).forEach((c: any) => {
+                                    if (typeof c?.displayId === 'number' && typeof c?.x === 'number' && typeof c?.y === 'number') {
+                                        posMap.set(c.displayId, { x: c.x, y: c.y });
+                                    }
+                                });
+                                // Update elements positions directly
+                                const updated: ClassType[] = classesRef.current.map(c => {
+                                    const u = posMap.get(c.displayId);
+                                    if (u && c.element) {
+                                        try { (c.element as any).position(u.x, u.y); } catch { }
+                                        return { ...c, x: u.x, y: u.y };
+                                    }
+                                    return c;
+                                });
+                                setClasses(updated);
+                            }
+                            setTimeout(() => {
+                                try {
+                                    pInst.unfreeze();
+                                    // ensure views update
+                                    gInst.getElements().forEach(el => {
+                                        const v = pInst.findViewByModel(el);
+                                        v?.update();
                                     });
-                                }
-                            } catch {}
+                                } catch { }
+                                applyingRemoteRef.current = false;
+                            }, 50);
+                        } catch (e) {
+                            console.error('Error applying move update:', e);
+                            applyingRemoteRef.current = false;
                         }
-                    } catch (e) { console.error('Error applying delete_relation:', e); }
-                    finally {
-                        try { pInst.unfreeze(); } catch {}
-                        applyingRemoteRef.current = false;
+                        return;
                     }
-                    return;
-                }
-                // Fast-path edit_element: update only one class (label/size)
-                if (data.changeType === 'edit_element' && incoming && typeof incoming === 'object') {
-                    try {
-                        applyingRemoteRef.current = true;
-                        const displayId = (incoming as any).displayId as number | undefined;
-                        if (!displayId) return;
-                        const name = (incoming as any).name as string | undefined;
-                        const attributes = (incoming as any).attributes as UMLAttribute[] | undefined;
-                        const methods = (incoming as any).methods as UMLMethod[] | undefined;
-                        const size = (incoming as any).size as { width:number; height:number } | undefined;
-                        const cls = classesRef.current.find(c => c.displayId === displayId);
-                        if (!cls || !cls.element) return;
-                        pInst.freeze();
-                        const newName = name ?? cls.name;
-                        const newAttrs: UMLAttribute[] = attributes ?? cls.attributes.map(parseAttrString);
-                        const newMethods: UMLMethod[] = methods ?? cls.methods.map(parseMethodString);
-                        const labelText = toLabelText(newName, newAttrs);
-                        let width = size?.width, height = size?.height;
-                        if (typeof width !== 'number' || typeof height !== 'number') {
-                            const fontSize = 12; const paddingX = 20; const paddingY = 30;
-                            const lines = labelText.split('\n');
-                            let maxLineWidth = 0; lines.forEach(line => { const m = measureText(line, fontSize); if (m.width > maxLineWidth) maxLineWidth = m.width; });
-                            width = Math.max(220, maxLineWidth + paddingX); height = fontSize * lines.length + paddingY;
+
+                    // Fast-path create_class: add only new class if payload matches
+                    if (data.changeType === 'create_class' && incoming && typeof incoming === 'object') {
+                        try {
+                            applyingRemoteRef.current = true;
+                            pInst.freeze();
+                            if ((incoming as any).node && (incoming as any).node.displayId) {
+                                const node = (incoming as any).node as UMLClassNode;
+                                const newCls = addClassNode(node, gInst, roleRef.current === 'creador' || roleRef.current === 'editor');
+                                setClasses(prev => [...prev, newCls]);
+                                setNextNumber(n => Math.max(n, (node.displayId || 0) + 1));
+                            }
+                        } catch (e) { console.error('Error applying create_class:', e); }
+                        finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
                         }
-                        cls.element.attr({
-                            label: { text: labelText, fontWeight: 'bold', fontSize: 12, fill: '#2477c3', fontFamily: 'monospace', xAlignment: 'middle' },
-                            idBg: { x: 10, y: 10, width: 26, height: 18, fill: '#2477c3', rx: 4, ry: 4 },
-                            idBadge: { text: String(displayId), x: 23, y: 23, fontSize: 12, fontWeight: 'bold', fill: '#ffffff', textAnchor: 'middle' }
-                        });
-                        cls.element.resize(width!, height!);
-                        // reubicar botones
-                        const baseMarkup: any[] = [
-                            { tagName: 'rect', selector: 'body' },
-                            { tagName: 'text', selector: 'label' },
-                            { tagName: 'rect', selector: 'idBg' },
-                            { tagName: 'text', selector: 'idBadge' },
-                            { tagName: 'g', children: [
-                                { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: (width! - 55), y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
-                                { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: (width! - 30), y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
-                            ]}
-                        ];
-                        (cls.element as any).markup = baseMarkup;
-                        clampElementInside(cls.element);
-                        // actualizar estado
-                        const newAttrsText = newAttrs.map(a => `${a.name}: ${a.type}`);
-                        const newMethodsText = newMethods.map(m => `${m.name}(): ${m.returns}`);
-                        setClasses(prev => prev.map(c => c.displayId === displayId ? { ...c, name: newName, attributes: newAttrsText, methods: newMethodsText } : c));
-                    } catch (e) { console.error('Error applying edit_element:', e); }
-                    finally {
-                        try { pInst.unfreeze(); } catch {}
-                        applyingRemoteRef.current = false;
+                        return;
                     }
-                    return;
-                }
-                // Fast-path delete_element: remove only one class
-                if (data.changeType === 'delete_element' && incoming && typeof incoming === 'object') {
-                    try {
-                        applyingRemoteRef.current = true;
-                        const displayId = (incoming as any).displayId as number | undefined;
-                        if (!displayId) return;
-                        const cls = classesRef.current.find(c => c.displayId === displayId);
-                        if (!cls || !cls.element) return;
-                        pInst.freeze();
-                        // remove element from graph
-                        try { (cls.element as any).remove(); } catch {}
-                        // remove links attached to it
+                    // Fast-path create_relation: add a single link if possible
+                    if (data.changeType === 'create_relation' && incoming && typeof incoming === 'object') {
                         try {
-                            suppressLinkEmitRef.current = true;
-                            const links = (gInst as any).getLinks ? (gInst as any).getLinks() : [];
-                            const elId = (cls.element as any).id;
-                            links.forEach((l: any) => {
-                                const sId = l.get('source')?.id; const tId = l.get('target')?.id;
-                                if (sId === elId || tId === elId) l.remove();
+                            applyingRemoteRef.current = true;
+                            pInst.freeze();
+                            if ((incoming as any).relation && (incoming as any).relation.fromDisplayId) {
+                                addRelationLink((incoming as any).relation as UMLRelation, gInst);
+                            }
+                        } catch (e) { console.error('Error applying create_relation:', e); }
+                        finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
+                        }
+                        return;
+                    }
+                    // Fast-path delete_relation: remove a single link if provided as minimal payload
+                    if (data.changeType === 'delete_relation' && incoming && typeof incoming === 'object') {
+                        try {
+                            applyingRemoteRef.current = true;
+                            pInst.freeze();
+                            const fromDisplayId = (incoming as any).fromDisplayId as number | undefined;
+                            const toDisplayId = (incoming as any).toDisplayId as number | undefined;
+                            if (typeof fromDisplayId === 'number' && typeof toDisplayId === 'number') {
+                                // Update state
+                                setRelations(prev => prev.filter(r => !(r.fromDisplayId === fromDisplayId && r.toDisplayId === toDisplayId)));
+                                // Remove the specific link from the graph
+                                try {
+                                    const fromEl = classesRef.current.find(c => c.displayId === fromDisplayId)?.element as any;
+                                    const toEl = classesRef.current.find(c => c.displayId === toDisplayId)?.element as any;
+                                    if (fromEl && toEl) {
+                                        const links = (gInst as any).getLinks ? (gInst as any).getLinks() : [];
+                                        links.forEach((l: any) => {
+                                            const sId = l.get('source')?.id; const tId = l.get('target')?.id;
+                                            if (sId === fromEl.id && tId === toEl.id) l.remove();
+                                        });
+                                    }
+                                } catch { }
+                            }
+                        } catch (e) { console.error('Error applying delete_relation:', e); }
+                        finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
+                        }
+                        return;
+                    }
+                    // Fast-path edit_element: update only one class (label/size)
+                    if (data.changeType === 'edit_element' && incoming && typeof incoming === 'object') {
+                        try {
+                            applyingRemoteRef.current = true;
+                            const displayId = (incoming as any).displayId as number | undefined;
+                            if (!displayId) return;
+                            const name = (incoming as any).name as string | undefined;
+                            const attributes = (incoming as any).attributes as UMLAttribute[] | undefined;
+                            const methods = (incoming as any).methods as UMLMethod[] | undefined;
+                            const size = (incoming as any).size as { width: number; height: number } | undefined;
+                            const cls = classesRef.current.find(c => c.displayId === displayId);
+                            if (!cls || !cls.element) return;
+                            pInst.freeze();
+                            const newName = name ?? cls.name;
+                            const newAttrs: UMLAttribute[] = attributes ?? cls.attributes.map(parseAttrString);
+                            const newMethods: UMLMethod[] = methods ?? cls.methods.map(parseMethodString);
+                            const labelText = toLabelText(newName, newAttrs);
+                            let width = size?.width, height = size?.height;
+                            if (typeof width !== 'number' || typeof height !== 'number') {
+                                const fontSize = 12; const paddingX = 20; const paddingY = 30;
+                                const lines = labelText.split('\n');
+                                let maxLineWidth = 0; lines.forEach(line => { const m = measureText(line, fontSize); if (m.width > maxLineWidth) maxLineWidth = m.width; });
+                                width = Math.max(220, maxLineWidth + paddingX); height = fontSize * lines.length + paddingY;
+                            }
+                            cls.element.attr({
+                                label: { text: labelText, fontWeight: 'bold', fontSize: 12, fill: '#2477c3', fontFamily: 'monospace', xAlignment: 'middle' },
+                                idBg: { x: 10, y: 10, width: 26, height: 18, fill: '#2477c3', rx: 4, ry: 4 },
+                                idBadge: { text: String(displayId), x: 23, y: 23, fontSize: 12, fontWeight: 'bold', fill: '#ffffff', textAnchor: 'middle' }
                             });
-                            suppressLinkEmitRef.current = false;
-                        } catch {}
-                        // update state
-                        setClasses(prev => prev.filter(c => c.displayId !== displayId));
-                        setRelations(prev => prev.filter(r => r.fromDisplayId !== displayId && r.toDisplayId !== displayId));
-                    } catch (e) { console.error('Error applying delete_element:', e); }
-                    finally {
-                        try { pInst.unfreeze(); } catch {}
-                        applyingRemoteRef.current = false;
-                    }
-                    return;
-                }
-                
-                // Fast-path delete_relation: remove only specific relation
-                if (data.changeType === 'delete_relation' && incoming && typeof incoming === 'object') {
-                    try {
-                        applyingRemoteRef.current = true;
-                        const fromDisplayId = (incoming as any).fromDisplayId as number | undefined;
-                        const toDisplayId = (incoming as any).toDisplayId as number | undefined;
-                        
-                        if (fromDisplayId == null || toDisplayId == null) return;
-                        
-                        // Find the classes
-                        const sourceClass = classesRef.current.find(c => c.displayId === fromDisplayId);
-                        const targetClass = classesRef.current.find(c => c.displayId === toDisplayId);
-                        
-                        if (!sourceClass?.element || !targetClass?.element) return;
-                        
-                        pInst.freeze();
-                        
-                        // Find and remove the link from graph
-                        try {
-                            suppressLinkEmitRef.current = true;
-                            const links = (gInst as any).getLinks ? (gInst as any).getLinks() : [];
-                            const sourceId = (sourceClass.element as any).id;
-                            const targetId = (targetClass.element as any).id;
-                            
-                            links.forEach((l: any) => {
-                                const sourceElementId = l.get('source')?.id;
-                                const targetElementId = l.get('target')?.id;
-                                if ((sourceElementId === sourceId && targetElementId === targetId) ||
-                                    (sourceElementId === targetId && targetElementId === sourceId)) {
-                                    l.remove();
+                            cls.element.resize(width!, height!);
+                            // reubicar botones
+                            const baseMarkup: any[] = [
+                                { tagName: 'rect', selector: 'body' },
+                                { tagName: 'text', selector: 'label' },
+                                { tagName: 'rect', selector: 'idBg' },
+                                { tagName: 'text', selector: 'idBadge' },
+                                {
+                                    tagName: 'g', children: [
+                                        { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: (width! - 55), y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
+                                        { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: (width! - 30), y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
+                                    ]
                                 }
-                            });
-                            suppressLinkEmitRef.current = false;
-                        } catch {}
-                        
-                        // Update relations state
-                        setRelations(prev => prev.filter(r => 
-                            !((r.fromDisplayId === fromDisplayId && r.toDisplayId === toDisplayId) ||
-                              (r.fromDisplayId === toDisplayId && r.toDisplayId === fromDisplayId))
-                        ));
-                        
-                    } catch (e) { 
-                        console.error('Error applying delete_relation:', e); 
-                    } finally {
-                        try { pInst.unfreeze(); } catch {}
-                        applyingRemoteRef.current = false;
+                            ];
+                            (cls.element as any).markup = baseMarkup;
+                            clampElementInside(cls.element);
+                            // actualizar estado
+                            const newAttrsText = newAttrs.map(a => `${a.name}: ${a.type}`);
+                            const newMethodsText = newMethods.map(m => `${m.name}(): ${m.returns}`);
+                            setClasses(prev => prev.map(c => c.displayId === displayId ? { ...c, name: newName, attributes: newAttrsText, methods: newMethodsText } : c));
+                        } catch (e) { console.error('Error applying edit_element:', e); }
+                        finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
+                        }
+                        return;
                     }
-                    return;
-                }
-                
-                // Set flag to prevent echo/loops
-                applyingRemoteRef.current = true;
-                
-                // Check if it's a structured model with classes array
-                if (incoming && typeof incoming === 'object' && Array.isArray(incoming.classes)) {
-                    console.log('Processing structured model with', incoming.classes.length, 'classes');
-                    
-                    // Force paper to freeze before clearing
-                    try {
-                        pInst.freeze();
-                        console.log('Paper frozen for update');
-                    } catch {}
-                    
-                    // Use renderFromModel for structured data
-                    renderFromModel(incoming, gInst, roleRef.current === 'creador' || roleRef.current === 'editor');
-                    
-                    // Force complete re-render with proper timing
-                    setTimeout(() => {
+                    // Fast-path delete_element: remove only one class
+                    if (data.changeType === 'delete_element' && incoming && typeof incoming === 'object') {
                         try {
-                            console.log('Unfreezing paper and forcing update...');
-                            pInst.unfreeze();
-                            
-                            // Force paper to update its view
-                            const elements = gInst.getElements();
-                            console.log('Elements after render:', elements.length);
-                            
-                            // Force redraw all elements
-                            elements.forEach(element => {
-                                const view = pInst.findViewByModel(element);
-                                if (view) {
-                                    view.update();
-                                }
-                            });
-                            
-                            // Force a complete redraw of the paper
+                            applyingRemoteRef.current = true;
+                            const displayId = (incoming as any).displayId as number | undefined;
+                            if (!displayId) return;
+                            const cls = classesRef.current.find(c => c.displayId === displayId);
+                            if (!cls || !cls.element) return;
+                            pInst.freeze();
+                            // remove element from graph
+                            try { (cls.element as any).remove(); } catch { }
+                            // remove links attached to it
                             try {
-                                (pInst as any).dumpViews();
-                                (pInst as any).renderViews();
-                            } catch {}
-                            
-                            console.log('Forced paper update completed');
-                            
-                        } catch (err) {
-                            console.error('Error during paper update:', err);
+                                suppressLinkEmitRef.current = true;
+                                const links = (gInst as any).getLinks ? (gInst as any).getLinks() : [];
+                                const elId = (cls.element as any).id;
+                                links.forEach((l: any) => {
+                                    const sId = l.get('source')?.id; const tId = l.get('target')?.id;
+                                    if (sId === elId || tId === elId) l.remove();
+                                });
+                                suppressLinkEmitRef.current = false;
+                            } catch { }
+                            // update state
+                            setClasses(prev => prev.filter(c => c.displayId !== displayId));
+                            setRelations(prev => prev.filter(r => r.fromDisplayId !== displayId && r.toDisplayId !== displayId));
+                        } catch (e) { console.error('Error applying delete_element:', e); }
+                        finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
                         }
-                        applyingRemoteRef.current = false;
-                    }, 200);
-                    
-                } else if (typeof incoming === 'string') {
-                    // Try to parse JSON string
-                    try {
-                        console.log('Parsing JSON string data');
-                        const parsedData = JSON.parse(incoming);
-                        
-                        pInst.freeze();
-                        
-                        if (Array.isArray(parsedData.classes)) {
-                            renderFromModel(parsedData, gInst, roleRef.current === 'creador' || roleRef.current === 'editor');
-                        } else {
-                            // Fallback to joint.js JSON format
-                            gInst.fromJSON(parsedData);
-                            rebuildStateFromGraph(gInst);
+                        return;
+                    }
+
+                    // Fast-path delete_relation: remove only specific relation
+                    if (data.changeType === 'delete_relation' && incoming && typeof incoming === 'object') {
+                        try {
+                            applyingRemoteRef.current = true;
+                            const fromDisplayId = (incoming as any).fromDisplayId as number | undefined;
+                            const toDisplayId = (incoming as any).toDisplayId as number | undefined;
+
+                            if (fromDisplayId == null || toDisplayId == null) return;
+
+                            // Find the classes
+                            const sourceClass = classesRef.current.find(c => c.displayId === fromDisplayId);
+                            const targetClass = classesRef.current.find(c => c.displayId === toDisplayId);
+
+                            if (!sourceClass?.element || !targetClass?.element) return;
+
+                            pInst.freeze();
+
+                            // Find and remove the link from graph
+                            try {
+                                suppressLinkEmitRef.current = true;
+                                const links = (gInst as any).getLinks ? (gInst as any).getLinks() : [];
+                                const sourceId = (sourceClass.element as any).id;
+                                const targetId = (targetClass.element as any).id;
+
+                                links.forEach((l: any) => {
+                                    const sourceElementId = l.get('source')?.id;
+                                    const targetElementId = l.get('target')?.id;
+                                    if ((sourceElementId === sourceId && targetElementId === targetId) ||
+                                        (sourceElementId === targetId && targetElementId === sourceId)) {
+                                        l.remove();
+                                    }
+                                });
+                                suppressLinkEmitRef.current = false;
+                            } catch { }
+
+                            // Update relations state
+                            setRelations(prev => prev.filter(r =>
+                                !((r.fromDisplayId === fromDisplayId && r.toDisplayId === toDisplayId) ||
+                                    (r.fromDisplayId === toDisplayId && r.toDisplayId === fromDisplayId))
+                            ));
+
+                        } catch (e) {
+                            console.error('Error applying delete_relation:', e);
+                        } finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
                         }
-                        
+                        return;
+                    }
+
+                    // Set flag to prevent echo/loops
+                    applyingRemoteRef.current = true;
+
+                    // Check if it's a structured model with classes array
+                    if (incoming && typeof incoming === 'object' && Array.isArray(incoming.classes)) {
+                        console.log('Processing structured model with', incoming.classes.length, 'classes');
+
+                        // Force paper to freeze before clearing
+                        try {
+                            pInst.freeze();
+                            console.log('Paper frozen for update');
+                        } catch { }
+
+                        // Use renderFromModel for structured data
+                        renderFromModel(incoming, gInst, roleRef.current === 'creador' || roleRef.current === 'editor');
+
+                        // Force complete re-render with proper timing
                         setTimeout(() => {
                             try {
+                                console.log('Unfreezing paper and forcing update...');
                                 pInst.unfreeze();
-                                
-                                // Force redraw
+
+                                // Force paper to update its view
                                 const elements = gInst.getElements();
+                                console.log('Elements after render:', elements.length);
+
+                                // Force redraw all elements
                                 elements.forEach(element => {
                                     const view = pInst.findViewByModel(element);
                                     if (view) {
                                         view.update();
                                     }
                                 });
-                            } catch {}
+
+                                // Force a complete redraw of the paper
+                                try {
+                                    (pInst as any).dumpViews();
+                                    (pInst as any).renderViews();
+                                } catch { }
+
+                                console.log('Forced paper update completed');
+
+                            } catch (err) {
+                                console.error('Error during paper update:', err);
+                            }
                             applyingRemoteRef.current = false;
                         }, 200);
-                        
-                    } catch (parseErr) {
-                        console.error('Error parsing JSON:', parseErr);
-                        applyingRemoteRef.current = false;
+
+                    } else if (typeof incoming === 'string') {
+                        // Try to parse JSON string
+                        try {
+                            console.log('Parsing JSON string data');
+                            const parsedData = JSON.parse(incoming);
+
+                            pInst.freeze();
+
+                            if (Array.isArray(parsedData.classes)) {
+                                renderFromModel(parsedData, gInst, roleRef.current === 'creador' || roleRef.current === 'editor');
+                            } else {
+                                // Fallback to joint.js JSON format
+                                gInst.fromJSON(parsedData);
+                                rebuildStateFromGraph(gInst);
+                            }
+
+                            setTimeout(() => {
+                                try {
+                                    pInst.unfreeze();
+
+                                    // Force redraw
+                                    const elements = gInst.getElements();
+                                    elements.forEach(element => {
+                                        const view = pInst.findViewByModel(element);
+                                        if (view) {
+                                            view.update();
+                                        }
+                                    });
+                                } catch { }
+                                applyingRemoteRef.current = false;
+                            }, 200);
+
+                        } catch (parseErr) {
+                            console.error('Error parsing JSON:', parseErr);
+                            applyingRemoteRef.current = false;
+                        }
+                    } else {
+                        // Fallback: assume it's joint.js format
+                        console.log('Applying diagram as joint.js format (fallback)');
+                        try {
+                            pInst.freeze();
+                            gInst.fromJSON(incoming);
+                            rebuildStateFromGraph(gInst);
+
+                            setTimeout(() => {
+                                try {
+                                    pInst.unfreeze();
+
+                                    // Force redraw all elements
+                                    const elements = gInst.getElements();
+                                    elements.forEach(element => {
+                                        const view = pInst.findViewByModel(element);
+                                        if (view) {
+                                            view.update();
+                                        }
+                                    });
+                                } catch { }
+                                applyingRemoteRef.current = false;
+                            }, 200);
+
+                        } catch (err) {
+                            console.error('Error applying joint.js format:', err);
+                            applyingRemoteRef.current = false;
+                        }
+                    }
+                    // Fast-path create_class: add only new class if payload matches
+                    if (data.changeType === 'create_class' && incoming && typeof incoming === 'object') {
+                        try {
+                            applyingRemoteRef.current = true;
+                            pInst.freeze();
+                            if ((incoming as any).node && (incoming as any).node.displayId) {
+                                const node = (incoming as any).node as UMLClassNode;
+                                const newCls = addClassNode(node, gInst, roleRef.current === 'creador' || roleRef.current === 'editor');
+                                setClasses(prev => [...prev, newCls]);
+                                setNextNumber(n => Math.max(n, (node.displayId || 0) + 1));
+                            }
+                        } catch (e) { console.error('Error applying create_class:', e); }
+                        finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
+                        }
+                        return;
+                    }
+                    // Fast-path create_relation: add a single link if possible
+                    if (data.changeType === 'create_relation' && incoming && typeof incoming === 'object') {
+                        try {
+                            applyingRemoteRef.current = true;
+                            pInst.freeze();
+                            if ((incoming as any).relation && (incoming as any).relation.fromDisplayId) {
+                                addRelationLink((incoming as any).relation as UMLRelation, gInst);
+                            }
+                        } catch (e) { console.error('Error applying create_relation:', e); }
+                        finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
+                        }
+                        return;
+                    }
+                    // Fast-path edit_element: update only one class (label/size)
+                    if (data.changeType === 'edit_element' && incoming && typeof incoming === 'object') {
+                        try {
+                            applyingRemoteRef.current = true;
+                            const displayId = (incoming as any).displayId as number | undefined;
+                            if (!displayId) return;
+                            const name = (incoming as any).name as string | undefined;
+                            const attributes = (incoming as any).attributes as UMLAttribute[] | undefined;
+                            const methods = (incoming as any).methods as UMLMethod[] | undefined;
+                            const size = (incoming as any).size as { width: number; height: number } | undefined;
+                            const cls = classesRef.current.find(c => c.displayId === displayId);
+                            if (!cls || !cls.element) return;
+                            pInst.freeze();
+                            const newName = name ?? cls.name;
+                            const newAttrs: UMLAttribute[] = attributes ?? cls.attributes.map(parseAttrString);
+                            const newMethods: UMLMethod[] = methods ?? cls.methods.map(parseMethodString);
+                            const labelText = toLabelText(newName, newAttrs);
+                            let width = size?.width, height = size?.height;
+                            if (typeof width !== 'number' || typeof height !== 'number') {
+                                const fontSize = 12; const paddingX = 20; const paddingY = 30;
+                                const lines = labelText.split('\n');
+                                let maxLineWidth = 0; lines.forEach(line => { const m = measureText(line, fontSize); if (m.width > maxLineWidth) maxLineWidth = m.width; });
+                                width = Math.max(220, maxLineWidth + paddingX); height = fontSize * lines.length + paddingY;
+                            }
+                            cls.element.attr({
+                                label: { text: labelText, fontWeight: 'bold', fontSize: 12, fill: '#2477c3', fontFamily: 'monospace', xAlignment: 'middle' },
+                                idBg: { x: 10, y: 10, width: 26, height: 18, fill: '#2477c3', rx: 4, ry: 4 },
+                                idBadge: { text: String(displayId), x: 23, y: 23, fontSize: 12, fontWeight: 'bold', fill: '#ffffff', textAnchor: 'middle' }
+                            });
+                            cls.element.resize(width!, height!);
+                            // reubicar botones
+                            const baseMarkup: any[] = [
+                                { tagName: 'rect', selector: 'body' },
+                                { tagName: 'text', selector: 'label' },
+                                { tagName: 'rect', selector: 'idBg' },
+                                { tagName: 'text', selector: 'idBadge' },
+                                {
+                                    tagName: 'g', children: [
+                                        { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: (width! - 55), y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
+                                        { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: (width! - 30), y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
+                                    ]
+                                }
+                            ];
+                            (cls.element as any).markup = baseMarkup;
+                            clampElementInside(cls.element);
+                            // actualizar estado
+                            const newAttrsText = newAttrs.map(a => `${a.name}: ${a.type}`);
+                            const newMethodsText = newMethods.map(m => `${m.name}(): ${m.returns}`);
+                            setClasses(prev => prev.map(c => c.displayId === displayId ? { ...c, name: newName, attributes: newAttrsText, methods: newMethodsText } : c));
+                        } catch (e) { console.error('Error applying edit_element:', e); }
+                        finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
+                        }
+                        return;
+                    }
+                    // Fast-path delete_element: remove only one class
+                    if (data.changeType === 'delete_element' && incoming && typeof incoming === 'object') {
+                        try {
+                            applyingRemoteRef.current = true;
+                            const displayId = (incoming as any).displayId as number | undefined;
+                            if (!displayId) return;
+                            const cls = classesRef.current.find(c => c.displayId === displayId);
+                            if (!cls || !cls.element) return;
+                            pInst.freeze();
+                            // remove element from graph
+                            try { (cls.element as any).remove(); } catch { }
+                            // remove links attached to it
+                            try {
+                                suppressLinkEmitRef.current = true;
+                                const links = (gInst as any).getLinks ? (gInst as any).getLinks() : [];
+                                const elId = (cls.element as any).id;
+                                links.forEach((l: any) => {
+                                    const sId = l.get('source')?.id; const tId = l.get('target')?.id;
+                                    if (sId === elId || tId === elId) l.remove();
+                                });
+                                suppressLinkEmitRef.current = false;
+                            } catch { }
+                            // update state
+                            setClasses(prev => prev.filter(c => c.displayId !== displayId));
+                            setRelations(prev => prev.filter(r => r.fromDisplayId !== displayId && r.toDisplayId !== displayId));
+                        } catch (e) { console.error('Error applying delete_element:', e); }
+                        finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
+                        }
+                        return;
                     }
                 } else {
-                    // Fallback: assume it's joint.js format
-                    console.log('Applying diagram as joint.js format (fallback)');
-                    try {
-                        pInst.freeze();
-                        gInst.fromJSON(incoming);
-                        rebuildStateFromGraph(gInst);
-                        
-                        setTimeout(() => {
-                            try {
-                                pInst.unfreeze();
-                                
-                                // Force redraw all elements
-                                const elements = gInst.getElements();
-                                elements.forEach(element => {
-                                    const view = pInst.findViewByModel(element);
-                                    if (view) {
-                                        view.update();
-                                    }
-                                });
-                            } catch {}
-                            applyingRemoteRef.current = false;
-                        }, 200);
-                        
-                    } catch(err) {
-                        console.error('Error applying joint.js format:', err);
-                        applyingRemoteRef.current = false;
-                    }
+                    console.log('Update not for current project, ignoring');
                 }
-                // Fast-path create_class: add only new class if payload matches
-                if (data.changeType === 'create_class' && incoming && typeof incoming === 'object') {
-                    try {
-                        applyingRemoteRef.current = true;
-                        pInst.freeze();
-                        if ((incoming as any).node && (incoming as any).node.displayId) {
-                            const node = (incoming as any).node as UMLClassNode;
-                            const newCls = addClassNode(node, gInst, roleRef.current === 'creador' || roleRef.current === 'editor');
-                            setClasses(prev => [...prev, newCls]);
-                            setNextNumber(n => Math.max(n, (node.displayId || 0) + 1));
-                        }
-                    } catch (e) { console.error('Error applying create_class:', e); }
-                    finally {
-                        try { pInst.unfreeze(); } catch {}
-                        applyingRemoteRef.current = false;
-                    }
-                    return;
-                }
-                // Fast-path create_relation: add a single link if possible
-                if (data.changeType === 'create_relation' && incoming && typeof incoming === 'object') {
-                    try {
-                        applyingRemoteRef.current = true;
-                        pInst.freeze();
-                        if ((incoming as any).relation && (incoming as any).relation.fromDisplayId) {
-                            addRelationLink((incoming as any).relation as UMLRelation, gInst);
-                        }
-                    } catch (e) { console.error('Error applying create_relation:', e); }
-                    finally {
-                        try { pInst.unfreeze(); } catch {}
-                        applyingRemoteRef.current = false;
-                    }
-                    return;
-                }
-                // Fast-path edit_element: update only one class (label/size)
-                if (data.changeType === 'edit_element' && incoming && typeof incoming === 'object') {
-                    try {
-                        applyingRemoteRef.current = true;
-                        const displayId = (incoming as any).displayId as number | undefined;
-                        if (!displayId) return;
-                        const name = (incoming as any).name as string | undefined;
-                        const attributes = (incoming as any).attributes as UMLAttribute[] | undefined;
-                        const methods = (incoming as any).methods as UMLMethod[] | undefined;
-                        const size = (incoming as any).size as { width:number; height:number } | undefined;
-                        const cls = classesRef.current.find(c => c.displayId === displayId);
-                        if (!cls || !cls.element) return;
-                        pInst.freeze();
-                        const newName = name ?? cls.name;
-                        const newAttrs: UMLAttribute[] = attributes ?? cls.attributes.map(parseAttrString);
-                        const newMethods: UMLMethod[] = methods ?? cls.methods.map(parseMethodString);
-                        const labelText = toLabelText(newName, newAttrs);
-                        let width = size?.width, height = size?.height;
-                        if (typeof width !== 'number' || typeof height !== 'number') {
-                            const fontSize = 12; const paddingX = 20; const paddingY = 30;
-                            const lines = labelText.split('\n');
-                            let maxLineWidth = 0; lines.forEach(line => { const m = measureText(line, fontSize); if (m.width > maxLineWidth) maxLineWidth = m.width; });
-                            width = Math.max(220, maxLineWidth + paddingX); height = fontSize * lines.length + paddingY;
-                        }
-                        cls.element.attr({
-                            label: { text: labelText, fontWeight: 'bold', fontSize: 12, fill: '#2477c3', fontFamily: 'monospace', xAlignment: 'middle' },
-                            idBg: { x: 10, y: 10, width: 26, height: 18, fill: '#2477c3', rx: 4, ry: 4 },
-                            idBadge: { text: String(displayId), x: 23, y: 23, fontSize: 12, fontWeight: 'bold', fill: '#ffffff', textAnchor: 'middle' }
-                        });
-                        cls.element.resize(width!, height!);
-                        // reubicar botones
-                        const baseMarkup: any[] = [
-                            { tagName: 'rect', selector: 'body' },
-                            { tagName: 'text', selector: 'label' },
-                            { tagName: 'rect', selector: 'idBg' },
-                            { tagName: 'text', selector: 'idBadge' },
-                            { tagName: 'g', children: [
-                                { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: (width! - 55), y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
-                                { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: (width! - 30), y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
-                            ]}
-                        ];
-                        (cls.element as any).markup = baseMarkup;
-                        clampElementInside(cls.element);
-                        // actualizar estado
-                        const newAttrsText = newAttrs.map(a => `${a.name}: ${a.type}`);
-                        const newMethodsText = newMethods.map(m => `${m.name}(): ${m.returns}`);
-                        setClasses(prev => prev.map(c => c.displayId === displayId ? { ...c, name: newName, attributes: newAttrsText, methods: newMethodsText } : c));
-                    } catch (e) { console.error('Error applying edit_element:', e); }
-                    finally {
-                        try { pInst.unfreeze(); } catch {}
-                        applyingRemoteRef.current = false;
-                    }
-                    return;
-                }
-                // Fast-path delete_element: remove only one class
-                if (data.changeType === 'delete_element' && incoming && typeof incoming === 'object') {
-                    try {
-                        applyingRemoteRef.current = true;
-                        const displayId = (incoming as any).displayId as number | undefined;
-                        if (!displayId) return;
-                        const cls = classesRef.current.find(c => c.displayId === displayId);
-                        if (!cls || !cls.element) return;
-                        pInst.freeze();
-                        // remove element from graph
-                        try { (cls.element as any).remove(); } catch {}
-                        // remove links attached to it
-                        try {
-                            suppressLinkEmitRef.current = true;
-                            const links = (gInst as any).getLinks ? (gInst as any).getLinks() : [];
-                            const elId = (cls.element as any).id;
-                            links.forEach((l: any) => {
-                                const sId = l.get('source')?.id; const tId = l.get('target')?.id;
-                                if (sId === elId || tId === elId) l.remove();
-                            });
-                            suppressLinkEmitRef.current = false;
-                        } catch {}
-                        // update state
-                        setClasses(prev => prev.filter(c => c.displayId !== displayId));
-                        setRelations(prev => prev.filter(r => r.fromDisplayId !== displayId && r.toDisplayId !== displayId));
-                    } catch (e) { console.error('Error applying delete_element:', e); }
-                    finally {
-                        try { pInst.unfreeze(); } catch {}
-                        applyingRemoteRef.current = false;
-                    }
-                    return;
-                }
-            } else {
-                console.log('Update not for current project, ignoring');
+            } catch (err) {
+                console.error('Error applying remote diagram update:', err);
+                applyingRemoteRef.current = false;
             }
-        } catch (err) { 
-            console.error('Error applying remote diagram update:', err);
-            applyingRemoteRef.current = false;
-        }
-    });
+        });
 
-    // Cursor moved events (optional visualization)
-    socketService.on('cursor-moved', () => {
-        // TODO: show remote cursors on canvas (future improvement)
-    });
-    socketService.on('element-selected', (data: any) => {
-        try {
-            const pid = projectId ? Number(projectId) : undefined;
-            if (!pid || data?.elementId == null) return;
-            const gInst = graphRef.current;
-            if (!gInst) return;
-            const cls = classesRef.current.find(c => c.displayId === Number(data.elementId));
-            const el = cls?.element;
-            if (!el) return;
-            const orig = { stroke: el.attr('body/stroke'), width: el.attr('body/strokeWidth') } as any;
-            el.attr('body/stroke', '#f39c12');
-            el.attr('body/strokeWidth', 4);
-            setTimeout(() => {
-                try {
-                    el.attr('body/stroke', orig.stroke || '#3986d3');
-                    el.attr('body/strokeWidth', orig.width || 2);
-                } catch {}
-            }, 300);
-        } catch {}
-    });
+        // Cursor moved events (optional visualization)
+        socketService.on('cursor-moved', () => {
+            // TODO: show remote cursors on canvas (future improvement)
+        });
+        socketService.on('element-selected', (data: any) => {
+            try {
+                const pid = projectId ? Number(projectId) : undefined;
+                if (!pid || data?.elementId == null) return;
+                const gInst = graphRef.current;
+                if (!gInst) return;
+                const cls = classesRef.current.find(c => c.displayId === Number(data.elementId));
+                const el = cls?.element;
+                if (!el) return;
+                const orig = { stroke: el.attr('body/stroke'), width: el.attr('body/strokeWidth') } as any;
+                el.attr('body/stroke', '#f39c12');
+                el.attr('body/strokeWidth', 4);
+                setTimeout(() => {
+                    try {
+                        el.attr('body/stroke', orig.stroke || '#3986d3');
+                        el.attr('body/strokeWidth', orig.width || 2);
+                    } catch { }
+                }, 300);
+            } catch { }
+        });
 
-    return () => {
-        try {
-            console.log('Limpiando conexiones WebSocket...');
-            graphRef.current = null;
-            paperRef.current = null;
-            
-            // Clean up socket event listeners
-            const handler = (paperInstance as any).__socketOnConnect;
-            if (handler) {
-                socketService.off('connect', handler);
+        return () => {
+            try {
+                console.log('Limpiando conexiones WebSocket...');
+                graphRef.current = null;
+                paperRef.current = null;
+
+                // Clean up socket event listeners
+                const handler = (paperInstance as any).__socketOnConnect;
+                if (handler) {
+                    socketService.off('connect', handler);
+                }
+
+                // Remove all event listeners for this component
+                socketService.off('diagram-updated');
+                socketService.off('cursor-moved');
+                socketService.off('joined-project');
+                socketService.off('connect_error');
+                socketService.off('user-joined');
+                socketService.off('user-left');
+
+                // Leave current project if we're in one
+                if (projectId) {
+                    socketService.leaveProject(Number(projectId));
+                }
+
+                // Clear auto-save timeout
+                if (saveDebounceRef.current) {
+                    window.clearTimeout(saveDebounceRef.current);
+                }
+            } catch (err) {
+                console.error('Error durante cleanup:', err);
             }
-            
-            // Remove all event listeners for this component
-            socketService.off('diagram-updated');
-            socketService.off('cursor-moved');
-            socketService.off('joined-project');
-            socketService.off('connect_error');
-            socketService.off('user-joined');
-            socketService.off('user-left');
-            
-            // Leave current project if we're in one
-            if (projectId) {
-                socketService.leaveProject(Number(projectId));
-            }
-            
-            // Clear auto-save timeout
-            if (saveDebounceRef.current) {
-                window.clearTimeout(saveDebounceRef.current);
-            }
-        } catch (err) {
-            console.error('Error durante cleanup:', err);
-        }
-    };
+        };
     }, []);
 
     // Utilidades para reconstruir estado a partir del Graph
@@ -1363,13 +1391,15 @@ const ConnectedDiagramPage: React.FC = () => {
                 { tagName: 'text', selector: 'idBadge' }
             ];
             if (includeButtons) {
-                base.push({ tagName: 'g', children: [
-                    { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
-                    { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
-                ]});
+                base.push({
+                    tagName: 'g', children: [
+                        { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
+                        { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
+                    ]
+                });
             }
             (element as any).markup = base;
-        } catch {}
+        } catch { }
     };
 
     // Cuando cambia el rol o cargamos el graph/paper, asegúrate de que TODAS las clases existentes
@@ -1380,7 +1410,7 @@ const ConnectedDiagramPage: React.FC = () => {
         const canEdit = myRole === 'creador' || myRole === 'editor';
         try {
             paper.freeze();
-        } catch {}
+        } catch { }
         try {
             const elements = (graph as any).getElements ? (graph as any).getElements() : [];
             elements.forEach((el: any) => ensureClassMarkup(el, canEdit));
@@ -1389,12 +1419,12 @@ const ConnectedDiagramPage: React.FC = () => {
                 try {
                     const view = paper.findViewByModel(el);
                     view?.update();
-                } catch {}
+                } catch { }
             });
-        } catch {}
+        } catch { }
         try {
             paper.unfreeze();
-        } catch {}
+        } catch { }
     }, [myRole, graph, paper]);
 
     const rebuildStateFromGraph = (g: joint.dia.Graph) => {
@@ -1404,7 +1434,7 @@ const ConnectedDiagramPage: React.FC = () => {
             let maxDisplayId = 0;
             elements.forEach((el: any) => {
                 // Solo considerar rectángulos estándar (clases)
-                try { ensureClassMarkup(el as any, (myRole === 'creador' || myRole === 'editor')); } catch {}
+                try { ensureClassMarkup(el as any, (myRole === 'creador' || myRole === 'editor')); } catch { }
                 const pos = el.position ? el.position() : { x: 0, y: 0 };
                 const labelText: string = el.attr ? (el.attr('label/text') as string) : '';
                 const parts = (labelText || '').split('-----------------------');
@@ -1490,7 +1520,7 @@ const ConnectedDiagramPage: React.FC = () => {
                     const s = (c.element as any).size();
                     size = { width: s.width, height: s.height };
                 }
-            } catch {}
+            } catch { }
             return {
                 id: `c-${c.displayId}`,
                 displayId: c.displayId,
@@ -1596,36 +1626,36 @@ const ConnectedDiagramPage: React.FC = () => {
         console.log('renderFromModel called with:', model, 'includeButtons:', includeButtons);
         // Asegurar IDs únicos antes de renderizar
         const normalized = normalizeModelDisplayIds(model);
-        
+
         // Limpia y pinta todo basado en modelo
         console.log('Freezing paper and clearing graph...');
-        try { 
+        try {
             if (paper) {
-                paper.freeze(); 
+                paper.freeze();
             }
-        } catch {}
-        
-        try { 
-            g.clear(); 
+        } catch { }
+
+        try {
+            g.clear();
             console.log('Graph cleared successfully');
         } catch (err) {
             console.error('Error clearing graph:', err);
         }
-        
+
         const newClasses: ClassType[] = [];
-        
+
         // Pintar clases
-    const classList = [...(normalized.classes || [])].sort((a,b)=>a.displayId - b.displayId);
+        const classList = [...(normalized.classes || [])].sort((a, b) => a.displayId - b.displayId);
         console.log('Rendering classes:', classList.length);
-        
+
         for (const node of classList) {
             console.log('Rendering class:', node.name, 'at position:', node.position);
-            
+
             const labelText = toLabelText(node.name, node.attributes);
             const fontSize = 12;
             let width = 220;
             let height = 140;
-            
+
             if (node.size && typeof node.size.width === 'number' && typeof node.size.height === 'number') {
                 width = node.size.width;
                 height = node.size.height;
@@ -1643,13 +1673,13 @@ const ConnectedDiagramPage: React.FC = () => {
             }
 
             const rect = new joint.shapes.standard.Rectangle();
-            
+
             // Set position first, then resize
             rect.position(node.position.x, node.position.y);
             rect.resize(width, height);
-            
+
             console.log(`Element ${node.name} positioned at (${node.position.x}, ${node.position.y}) with size ${width}x${height}`);
-            
+
             rect.attr({
                 body: {
                     fill: '#fff', stroke: '#3986d3', strokeWidth: 2, rx: 20, ry: 20,
@@ -1659,38 +1689,40 @@ const ConnectedDiagramPage: React.FC = () => {
                 idBg: { x: 10, y: 10, width: 26, height: 18, fill: '#2477c3', rx: 4, ry: 4 },
                 idBadge: { text: String(node.displayId), x: 23, y: 23, fontSize: 12, fontWeight: 'bold', fill: '#ffffff', textAnchor: 'middle' }
             });
-            
+
             const baseMarkup: any[] = [
                 { tagName: 'rect', selector: 'body' },
                 { tagName: 'text', selector: 'label' },
                 { tagName: 'rect', selector: 'idBg' },
                 { tagName: 'text', selector: 'idBadge' }
             ];
-            
+
             if (includeButtons) {
-                baseMarkup.push({ tagName: 'g', children: [
-                    { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
-                    { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
-                ]});
+                baseMarkup.push({
+                    tagName: 'g', children: [
+                        { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
+                        { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
+                    ]
+                });
             }
-            
+
             rect.markup = baseMarkup;
-            
+
             // Add to graph and verify
             try {
                 rect.addTo(g);
                 console.log(`Element ${node.name} added to graph successfully`);
-                
+
                 // Verify position after adding
                 const actualPos = rect.position();
                 console.log(`Element ${node.name} actual position after addTo:`, actualPos);
-                
+
             } catch (err) {
                 console.error(`Error adding element ${node.name} to graph:`, err);
             }
-            
+
             clampElementInside(rect);
-            
+
             newClasses.push({
                 id: Date.now() + Math.floor(Math.random() * 1000),
                 name: node.name,
@@ -1702,19 +1734,19 @@ const ConnectedDiagramPage: React.FC = () => {
                 element: rect
             });
         }
-        
+
         console.log('Setting state with', newClasses.length, 'classes and', (model.relations || []).length, 'relations');
-        
+
         // Update state but don't trigger autosave (we're applying remote changes)
-    setClasses(newClasses);
-    setRelations(normalized.relations || []);
-    setNextNumber(normalized.nextDisplayId || (Math.max(0, ...newClasses.map(c => c.displayId)) + 1));
+        setClasses(newClasses);
+        setRelations(normalized.relations || []);
+        setNextNumber(normalized.nextDisplayId || (Math.max(0, ...newClasses.map(c => c.displayId)) + 1));
 
         // Pintar relaciones
-    console.log('Rendering relations:', normalized.relations?.length || 0);
+        console.log('Rendering relations:', normalized.relations?.length || 0);
         const getElByDisplay = (idNum: number) => newClasses.find(c => c.displayId === idNum)?.element;
-        
-    for (const rel of normalized.relations || []) {
+
+        for (const rel of normalized.relations || []) {
             const origenEl = getElByDisplay(rel.fromDisplayId);
             const destinoEl = getElByDisplay(rel.toDisplayId);
             if (!origenEl || !destinoEl) {
@@ -1722,7 +1754,7 @@ const ConnectedDiagramPage: React.FC = () => {
                 continue;
             }
             console.log('Creating relation from', rel.fromDisplayId, 'to', rel.toDisplayId);
-            
+
             const link = new joint.shapes.standard.Link();
             link.source(origenEl);
             link.target(destinoEl);
@@ -1738,25 +1770,25 @@ const ConnectedDiagramPage: React.FC = () => {
                 if (rel.originCard) labels.push({ position: 0.15, attrs: { text: { text: rel.originCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
                 if (rel.destCard) labels.push({ position: 0.85, attrs: { text: { text: rel.destCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
                 if (rel.verb) labels.push({ position: 0.5, attrs: { text: { text: rel.verb, fill: '#111', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#fff', stroke: '#e5e7eb', strokeWidth: 1, rx: 6, ry: 6, opacity: 0.9 } } });
-                
+
                 // Agregar botón de eliminación para usuarios con permisos
                 if (includeButtons) {
                     labels.push({
                         position: rel.verb ? 0.35 : 0.5,
                         attrs: {
-                            text: { 
-                                text: '❌', 
-                                fill: '#dc3545', 
-                                fontSize: 14, 
+                            text: {
+                                text: '❌',
+                                fill: '#dc3545',
+                                fontSize: 14,
                                 fontWeight: 'bold',
                                 cursor: 'pointer'
                             },
-                            rect: { 
-                                fill: '#ffffff', 
-                                stroke: '#dc3545', 
-                                strokeWidth: 1, 
-                                rx: 8, 
-                                ry: 8, 
+                            rect: {
+                                fill: '#ffffff',
+                                stroke: '#dc3545',
+                                strokeWidth: 1,
+                                rx: 8,
+                                ry: 8,
                                 opacity: 0.9,
                                 cursor: 'pointer'
                             }
@@ -1767,8 +1799,8 @@ const ConnectedDiagramPage: React.FC = () => {
                         ]
                     });
                 }
-                
-                try { link.labels(labels); } catch {}
+
+                try { link.labels(labels); } catch { }
             } else {
                 // Para otros tipos de relación, solo agregar botón de eliminación
                 if (includeButtons) {
@@ -1776,19 +1808,19 @@ const ConnectedDiagramPage: React.FC = () => {
                         link.labels([{
                             position: 0.5,
                             attrs: {
-                                text: { 
-                                    text: '❌', 
-                                    fill: '#dc3545', 
-                                    fontSize: 14, 
+                                text: {
+                                    text: '❌',
+                                    fill: '#dc3545',
+                                    fontSize: 14,
                                     fontWeight: 'bold',
                                     cursor: 'pointer'
                                 },
-                                rect: { 
-                                    fill: '#ffffff', 
-                                    stroke: '#dc3545', 
-                                    strokeWidth: 1, 
-                                    rx: 8, 
-                                    ry: 8, 
+                                rect: {
+                                    fill: '#ffffff',
+                                    stroke: '#dc3545',
+                                    strokeWidth: 1,
+                                    rx: 8,
+                                    ry: 8,
                                     opacity: 0.9,
                                     cursor: 'pointer'
                                 }
@@ -1798,11 +1830,11 @@ const ConnectedDiagramPage: React.FC = () => {
                                 { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
                             ]
                         }]);
-                    } catch {}
+                    } catch { }
                 }
             }
             link.connector('smooth');
-            
+
             try {
                 link.addTo(g);
                 console.log(`Relation ${rel.type} added to graph successfully`);
@@ -1810,7 +1842,7 @@ const ConnectedDiagramPage: React.FC = () => {
                 console.error('Error adding relation to graph:', err);
             }
         }
-        
+
         console.log('renderFromModel completed. Total elements in graph:', g.getElements().length);
         console.log('Graph elements positions:');
         g.getElements().forEach(el => {
@@ -1818,14 +1850,14 @@ const ConnectedDiagramPage: React.FC = () => {
             const id = el.attr('idBadge/text');
             console.log(`Element ${id}: position (${pos.x}, ${pos.y})`);
         });
-        
+
         // Don't unfreeze here - let the calling function handle it
         console.log('renderFromModel finished (paper still frozen)');
     };
 
     // Helper: add a single class node to the graph/state
     const addClassNode = (node: UMLClassNode, g: joint.dia.Graph, includeButtons: boolean = true): ClassType => {
-    const labelText = toLabelText(node.name, node.attributes);
+        const labelText = toLabelText(node.name, node.attributes);
         const fontSize = 12;
         let width = 220;
         let height = 140;
@@ -1846,12 +1878,14 @@ const ConnectedDiagramPage: React.FC = () => {
             idBg: { x: 10, y: 10, width: 26, height: 18, fill: '#2477c3', rx: 4, ry: 4 },
             idBadge: { text: String(node.displayId), x: 23, y: 23, fontSize: 12, fontWeight: 'bold', fill: '#ffffff', textAnchor: 'middle' }
         });
-        const baseMarkup: any[] = [ { tagName: 'rect', selector: 'body' }, { tagName: 'text', selector: 'label' }, { tagName: 'rect', selector: 'idBg' }, { tagName: 'text', selector: 'idBadge' } ];
+        const baseMarkup: any[] = [{ tagName: 'rect', selector: 'body' }, { tagName: 'text', selector: 'label' }, { tagName: 'rect', selector: 'idBg' }, { tagName: 'text', selector: 'idBadge' }];
         if (includeButtons) {
-            baseMarkup.push({ tagName: 'g', children: [
-                { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
-                { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
-            ]});
+            baseMarkup.push({
+                tagName: 'g', children: [
+                    { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
+                    { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
+                ]
+            });
         }
         rect.markup = baseMarkup;
         rect.addTo(g);
@@ -1888,25 +1922,25 @@ const ConnectedDiagramPage: React.FC = () => {
             if (rel.originCard) labels.push({ position: 0.15, attrs: { text: { text: rel.originCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
             if (rel.destCard) labels.push({ position: 0.85, attrs: { text: { text: rel.destCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
             if (rel.verb) labels.push({ position: 0.5, attrs: { text: { text: rel.verb, fill: '#111', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#fff', stroke: '#e5e7eb', strokeWidth: 1, rx: 6, ry: 6, opacity: 0.9 } } });
-            
+
             // Agregar botón de eliminación para usuarios con permisos
             if (myRole === 'creador' || myRole === 'editor') {
                 labels.push({
                     position: rel.verb ? 0.35 : 0.5,
                     attrs: {
-                        text: { 
-                            text: '❌', 
-                            fill: '#dc3545', 
-                            fontSize: 14, 
+                        text: {
+                            text: '❌',
+                            fill: '#dc3545',
+                            fontSize: 14,
                             fontWeight: 'bold',
                             cursor: 'pointer'
                         },
-                        rect: { 
-                            fill: '#ffffff', 
-                            stroke: '#dc3545', 
-                            strokeWidth: 1, 
-                            rx: 8, 
-                            ry: 8, 
+                        rect: {
+                            fill: '#ffffff',
+                            stroke: '#dc3545',
+                            strokeWidth: 1,
+                            rx: 8,
+                            ry: 8,
                             opacity: 0.9,
                             cursor: 'pointer'
                         }
@@ -1917,8 +1951,8 @@ const ConnectedDiagramPage: React.FC = () => {
                     ]
                 });
             }
-            
-            try { link.labels(labels); } catch {}
+
+            try { link.labels(labels); } catch { }
         } else {
             // Para otros tipos de relación, solo agregar botón de eliminación
             if (myRole === 'creador' || myRole === 'editor') {
@@ -1926,19 +1960,19 @@ const ConnectedDiagramPage: React.FC = () => {
                     link.labels([{
                         position: 0.5,
                         attrs: {
-                            text: { 
-                                text: '❌', 
-                                fill: '#dc3545', 
-                                fontSize: 14, 
+                            text: {
+                                text: '❌',
+                                fill: '#dc3545',
+                                fontSize: 14,
                                 fontWeight: 'bold',
                                 cursor: 'pointer'
                             },
-                            rect: { 
-                                fill: '#ffffff', 
-                                stroke: '#dc3545', 
-                                strokeWidth: 1, 
-                                rx: 8, 
-                                ry: 8, 
+                            rect: {
+                                fill: '#ffffff',
+                                stroke: '#dc3545',
+                                strokeWidth: 1,
+                                rx: 8,
+                                ry: 8,
                                 opacity: 0.9,
                                 cursor: 'pointer'
                             }
@@ -1948,11 +1982,11 @@ const ConnectedDiagramPage: React.FC = () => {
                             { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
                         ]
                     }]);
-                } catch {}
+                } catch { }
             }
         }
         link.connector('smooth');
-        try { link.addTo(g); } catch {}
+        try { link.addTo(g); } catch { }
         setRelations(prev => [...prev, rel]);
         return true;
     };
@@ -2002,7 +2036,7 @@ const ConnectedDiagramPage: React.FC = () => {
                                     const badge = el.attr('idBadge/text');
                                     if (badge) displayId = Number(badge);
                                 }
-                            } catch {}
+                            } catch { }
                             const payload: DiagramUpdate = {
                                 projectId: pid,
                                 userId: Number(localStorage.getItem('userId') || 0),
@@ -2012,8 +2046,8 @@ const ConnectedDiagramPage: React.FC = () => {
                                 timestamp: new Date().toISOString()
                             };
                             // cursor move event
-                            try { socketService.sendCursorMove({ projectId: pid, userId: Number(localStorage.getItem('userId') || 0), x: pos.x, y: pos.y, userName: localStorage.getItem('userName') || '' }); } catch {}
-                            try { socketService.sendDiagramUpdate(payload); } catch {}
+                            try { socketService.sendCursorMove({ projectId: pid, userId: Number(localStorage.getItem('userId') || 0), x: pos.x, y: pos.y, userName: localStorage.getItem('userName') || '' }); } catch { }
+                            try { socketService.sendDiagramUpdate(payload); } catch { }
                             // programar guardado del modelo completo
                             scheduleAutoSave();
                         }
@@ -2038,11 +2072,11 @@ const ConnectedDiagramPage: React.FC = () => {
                         if (fromCls && toCls) {
                             const minimalRel: UMLRelation = { id: `r-${Date.now()}`, fromDisplayId: fromCls.displayId, toDisplayId: toCls.displayId, type: 'asociacion' };
                             const payload: DiagramUpdate = { projectId: pid, userId: Number(localStorage.getItem('userId') || 0), diagramData: { relation: minimalRel }, changeType: 'create_relation', elementId: undefined, timestamp: new Date().toISOString() };
-                            try { socketService.sendDiagramUpdate(payload); } catch {}
+                            try { socketService.sendDiagramUpdate(payload); } catch { }
                         }
                     }
                 }
-            } catch {}
+            } catch { }
         };
         const onRemove = (cell: any) => {
             try {
@@ -2067,7 +2101,7 @@ const ConnectedDiagramPage: React.FC = () => {
                                     elementId: undefined,
                                     timestamp: new Date().toISOString()
                                 };
-                                try { socketService.sendDiagramUpdate(payload); } catch {}
+                                try { socketService.sendDiagramUpdate(payload); } catch { }
                             } else {
                                 // fallback a autosave si no se puede mapear
                                 scheduleAutoSave();
@@ -2087,11 +2121,11 @@ const ConnectedDiagramPage: React.FC = () => {
                             setClasses(prev => prev.filter(c => c.displayId !== displayId));
                             setRelations(prev => prev.filter(r => r.fromDisplayId !== displayId && r.toDisplayId !== displayId));
                             const payload: DiagramUpdate = { projectId: pid, userId: Number(localStorage.getItem('userId') || 0), diagramData: { displayId }, changeType: 'delete_element', elementId: displayId, timestamp: new Date().toISOString() };
-                            try { socketService.sendDiagramUpdate(payload); } catch {}
+                            try { socketService.sendDiagramUpdate(payload); } catch { }
                         }
                     }
                 }
-            } catch {}
+            } catch { }
         };
         const onLinkChange = (cell: any) => {
             try {
@@ -2101,10 +2135,10 @@ const ConnectedDiagramPage: React.FC = () => {
                     const pid = projectId ? Number(projectId) : undefined;
                     if (pid) {
                         const payload: DiagramUpdate = { projectId: pid, userId: Number(localStorage.getItem('userId') || 0), diagramData: buildModelFromCurrent(), changeType: 'edit_relation', elementId: undefined, timestamp: new Date().toISOString() };
-                        try { socketService.sendDiagramUpdate(payload); } catch {}
+                        try { socketService.sendDiagramUpdate(payload); } catch { }
                     }
                 }
-            } catch {}
+            } catch { }
         };
         (graph as any).on('add', onAdd);
         (graph as any).on('remove', onRemove);
@@ -2178,10 +2212,12 @@ const ConnectedDiagramPage: React.FC = () => {
                     { tagName: 'text', selector: 'label' },
                     { tagName: 'rect', selector: 'idBg' },
                     { tagName: 'text', selector: 'idBadge' },
-                    { tagName: 'g', children: [
-                        { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
-                        { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
-                    ]}
+                    {
+                        tagName: 'g', children: [
+                            { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
+                            { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
+                        ]
+                    }
                 ];
                 rect.addTo(graph);
                 clampElementInside(rect);
@@ -2197,11 +2233,11 @@ const ConnectedDiagramPage: React.FC = () => {
                         const newNode: UMLClassNode = { id: `c-${displayId}`, displayId, name, position: { x, y }, size: { width, height }, attributes: attributes.map((line: string) => parseAttrString(line)), methods: [] };
                         const payload: DiagramUpdate = { projectId: pidNumAI, userId: Number(localStorage.getItem('userId') || 0), diagramData: { node: newNode }, changeType: 'create_class', elementId: displayId, timestamp: new Date().toISOString() };
                         // Join room if not yet
-                        try { if (socketService.isConnected() && !socketService.isInProject(pidNumAI)) socketService.joinProject(pidNumAI); } catch {}
+                        try { if (socketService.isConnected() && !socketService.isInProject(pidNumAI)) socketService.joinProject(pidNumAI); } catch { }
                         socketService.sendDiagramUpdate(payload);
                         // persist full model as well
                         scheduleAutoSave();
-                    } catch {}
+                    } catch { }
                 }
                 return;
             }
@@ -2230,7 +2266,7 @@ const ConnectedDiagramPage: React.FC = () => {
                         const s = l.get('source'); const t = l.get('target');
                         const sid = s && s.id; const tid = t && t.id;
                         if ((sid === aId && tid === bId) || (sid === bId && tid === aId)) {
-                            suppressLinkEmitRef.current = true; try { l.remove(); removed = true; } catch {} suppressLinkEmitRef.current = false;
+                            suppressLinkEmitRef.current = true; try { l.remove(); removed = true; } catch { } suppressLinkEmitRef.current = false;
                         }
                     });
                     if (removed) {
@@ -2239,12 +2275,12 @@ const ConnectedDiagramPage: React.FC = () => {
                         if (pid) {
                             const minimal = { fromDisplayId: origen.displayId, toDisplayId: destino.displayId };
                             const payload: DiagramUpdate = { projectId: pid, userId: Number(localStorage.getItem('userId') || 0), diagramData: minimal, changeType: 'delete_relation', elementId: undefined, timestamp: new Date().toISOString() };
-                            try { if (socketService.isConnected() && !socketService.isInProject(pid)) socketService.joinProject(pid); } catch {}
+                            try { if (socketService.isConnected() && !socketService.isInProject(pid)) socketService.joinProject(pid); } catch { }
                             socketService.sendDiagramUpdate(payload);
                             scheduleAutoSave();
                         }
                     }
-                } catch {}
+                } catch { }
                 return;
             }
         }
@@ -2259,10 +2295,10 @@ const ConnectedDiagramPage: React.FC = () => {
         const x = 100 + classes.length * 50;
         const y = 100 + classes.length * 50;
         const displayId = nextNumber;
-    const attributes: string[] = ['atributo1: String', 'atributo2: Int'];
-    const methods: string[] = [];
+        const attributes: string[] = ['atributo1: String', 'atributo2: Int'];
+        const methods: string[] = [];
 
-    const labelText = `${name}\n-----------------------\n${attributes.join('\n')}`;
+        const labelText = `${name}\n-----------------------\n${attributes.join('\n')}`;
         const fontSize = 12;
         const paddingX = 20;
         const paddingY = 30;
@@ -2369,10 +2405,10 @@ const ConnectedDiagramPage: React.FC = () => {
             }
         ];
 
-    rect.addTo(graph);
-    clampElementInside(rect);
+        rect.addTo(graph);
+        clampElementInside(rect);
 
-    setClasses([...classes, { id, name, x, y, displayId, attributes, methods, element: rect }]);
+        setClasses([...classes, { id, name, x, y, displayId, attributes, methods, element: rect }]);
         setNextNumber(n => n + 1);
         const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
         if (pidNum) {
@@ -2383,10 +2419,10 @@ const ConnectedDiagramPage: React.FC = () => {
             try {
                 const newNode: UMLClassNode = { id: `c-${displayId}`, displayId, name, position: { x, y }, size: { width, height }, attributes: attributes.map((line: string) => parseAttrString(line)), methods: [] };
                 const payload: DiagramUpdate = { projectId: pidNum, userId: Number(localStorage.getItem('userId') || 0), diagramData: { node: newNode }, changeType: 'create_class', elementId: displayId, timestamp: new Date().toISOString() };
-                try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch {}
+                try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch { }
                 socketService.sendDiagramUpdate(payload);
                 scheduleAutoSave();
-            } catch {}
+            } catch { }
         }
     };
 
@@ -2409,9 +2445,9 @@ const ConnectedDiagramPage: React.FC = () => {
                     l.remove();
                 }
             });
-        } catch {}
+        } catch { }
 
-    const link = new joint.shapes.standard.Link();
+        const link = new joint.shapes.standard.Link();
         link.source(origen.element);
         link.target(destino.element);
 
@@ -2482,25 +2518,25 @@ const ConnectedDiagramPage: React.FC = () => {
                         }
                     });
                 }
-                
+
                 // Agregar botón de eliminación para usuarios con permisos
                 if (myRole === 'creador' || myRole === 'editor') {
                     labels.push({
                         position: relationVerb && relationVerb.trim() ? 0.35 : 0.5,
                         attrs: {
-                            text: { 
-                                text: '❌', 
-                                fill: '#dc3545', 
-                                fontSize: 14, 
+                            text: {
+                                text: '❌',
+                                fill: '#dc3545',
+                                fontSize: 14,
                                 fontWeight: 'bold',
                                 cursor: 'pointer'
                             },
-                            rect: { 
-                                fill: '#ffffff', 
-                                stroke: '#dc3545', 
-                                strokeWidth: 1, 
-                                rx: 8, 
-                                ry: 8, 
+                            rect: {
+                                fill: '#ffffff',
+                                stroke: '#dc3545',
+                                strokeWidth: 1,
+                                rx: 8,
+                                ry: 8,
                                 opacity: 0.9,
                                 cursor: 'pointer'
                             }
@@ -2511,7 +2547,7 @@ const ConnectedDiagramPage: React.FC = () => {
                         ]
                     });
                 }
-                
+
                 link.labels(labels);
             } catch (e) {
                 try {
@@ -2526,11 +2562,11 @@ const ConnectedDiagramPage: React.FC = () => {
                     // Agregar botón de eliminación en el catch también
                     if (myRole === 'creador' || myRole === 'editor') {
                         // @ts-ignore
-                        link.appendLabel({ 
-                            position: relationVerb && relationVerb.trim() ? 0.35 : 0.5, 
-                            attrs: { 
-                                text: { text: '❌', fill: '#dc3545', fontSize: 14, fontWeight: 'bold', cursor: 'pointer' }, 
-                                rect: { fill: '#ffffff', stroke: '#dc3545', strokeWidth: 1, rx: 8, ry: 8, opacity: 0.9, cursor: 'pointer' } 
+                        link.appendLabel({
+                            position: relationVerb && relationVerb.trim() ? 0.35 : 0.5,
+                            attrs: {
+                                text: { text: '❌', fill: '#dc3545', fontSize: 14, fontWeight: 'bold', cursor: 'pointer' },
+                                rect: { fill: '#ffffff', stroke: '#dc3545', strokeWidth: 1, rx: 8, ry: 8, opacity: 0.9, cursor: 'pointer' }
                             },
                             markup: [
                                 { tagName: 'rect', selector: 'rect' },
@@ -2538,7 +2574,7 @@ const ConnectedDiagramPage: React.FC = () => {
                             ]
                         });
                     }
-                } catch {}
+                } catch { }
             }
         } else {
             // Para otros tipos de relación (herencia, agregación, composición), solo agregar botón de eliminación
@@ -2547,19 +2583,19 @@ const ConnectedDiagramPage: React.FC = () => {
                     link.labels([{
                         position: 0.5,
                         attrs: {
-                            text: { 
-                                text: '❌', 
-                                fill: '#dc3545', 
-                                fontSize: 14, 
+                            text: {
+                                text: '❌',
+                                fill: '#dc3545',
+                                fontSize: 14,
                                 fontWeight: 'bold',
                                 cursor: 'pointer'
                             },
-                            rect: { 
-                                fill: '#ffffff', 
-                                stroke: '#dc3545', 
-                                strokeWidth: 1, 
-                                rx: 8, 
-                                ry: 8, 
+                            rect: {
+                                fill: '#ffffff',
+                                stroke: '#dc3545',
+                                strokeWidth: 1,
+                                rx: 8,
+                                ry: 8,
                                 opacity: 0.9,
                                 cursor: 'pointer'
                             }
@@ -2572,32 +2608,32 @@ const ConnectedDiagramPage: React.FC = () => {
                 } catch (e) {
                     try {
                         // @ts-ignore
-                        link.appendLabel({ 
-                            position: 0.5, 
-                            attrs: { 
-                                text: { text: '❌', fill: '#dc3545', fontSize: 14, fontWeight: 'bold', cursor: 'pointer' }, 
-                                rect: { fill: '#ffffff', stroke: '#dc3545', strokeWidth: 1, rx: 8, ry: 8, opacity: 0.9, cursor: 'pointer' } 
+                        link.appendLabel({
+                            position: 0.5,
+                            attrs: {
+                                text: { text: '❌', fill: '#dc3545', fontSize: 14, fontWeight: 'bold', cursor: 'pointer' },
+                                rect: { fill: '#ffffff', stroke: '#dc3545', strokeWidth: 1, rx: 8, ry: 8, opacity: 0.9, cursor: 'pointer' }
                             },
                             markup: [
                                 { tagName: 'rect', selector: 'rect' },
                                 { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
                             ]
                         });
-                    } catch {}
+                    } catch { }
                 }
             }
         }
-    link.connector('smooth');
-    creatingLinkRef.current = true;
-    link.addTo(graph);
-    creatingLinkRef.current = false;
+        link.connector('smooth');
+        creatingLinkRef.current = true;
+        link.addTo(graph);
+        creatingLinkRef.current = false;
 
         setOriginNum('');
         setDestNum('');
         // Registrar relación en el estado estructurado
         setRelations(prev => {
             const newRel: UMLRelation = {
-                id: `r-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+                id: `r-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                 fromDisplayId: origen.displayId,
                 toDisplayId: destino.displayId,
                 type: relationType as UMLRelationType,
@@ -2606,22 +2642,22 @@ const ConnectedDiagramPage: React.FC = () => {
                 verb: relationType === 'asociacion' ? (relationVerb || undefined) : undefined
             };
             // elimina cualquier relación previa entre mismos nodos (cierre sobreescritura)
-            const filtered = prev.filter(r => !( (r.fromDisplayId === newRel.fromDisplayId && r.toDisplayId === newRel.toDisplayId) || (r.fromDisplayId === newRel.toDisplayId && r.toDisplayId === newRel.fromDisplayId) ));
+            const filtered = prev.filter(r => !((r.fromDisplayId === newRel.fromDisplayId && r.toDisplayId === newRel.toDisplayId) || (r.fromDisplayId === newRel.toDisplayId && r.toDisplayId === newRel.fromDisplayId)));
             return [...filtered, newRel];
         });
         const pidNumRel = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
         if (pidNumRel) {
             const selfId = Number(localStorage.getItem('userId') || 0);
             const selfName = getUserDisplay(selfId);
-            addActivity(String(pidNumRel), { type: 'create_relation', message: `${selfName} creó relación ${relationType} entre #${originNum} y #${destNum}${relationType==='asociacion' && relationVerb?` (${relationVerb})`:''}`, byUserId: selfId, byName: selfName });
+            addActivity(String(pidNumRel), { type: 'create_relation', message: `${selfName} creó relación ${relationType} entre #${originNum} y #${destNum}${relationType === 'asociacion' && relationVerb ? ` (${relationVerb})` : ''}`, byUserId: selfId, byName: selfName });
             setActivities(getActivities(String(pidNumRel)));
             try {
                 const relationPayload: UMLRelation = { id: `r-${Date.now()}`, fromDisplayId: origen.displayId, toDisplayId: destino.displayId, type: relationType as UMLRelationType, originCard: relationType === 'asociacion' ? originCard : undefined, destCard: relationType === 'asociacion' ? destCard : undefined, verb: relationType === 'asociacion' ? (relationVerb || undefined) : undefined };
                 const payload: DiagramUpdate = { projectId: pidNumRel, userId: Number(localStorage.getItem('userId') || 0), diagramData: { relation: relationPayload }, changeType: 'create_relation', elementId: undefined, timestamp: new Date().toISOString() };
-                try { if (socketService.isConnected() && !socketService.isInProject(pidNumRel)) socketService.joinProject(pidNumRel); } catch {}
+                try { if (socketService.isConnected() && !socketService.isInProject(pidNumRel)) socketService.joinProject(pidNumRel); } catch { }
                 socketService.sendDiagramUpdate(payload);
                 scheduleAutoSave();
-            } catch {}
+            } catch { }
         }
     };
 
@@ -2640,9 +2676,9 @@ const ConnectedDiagramPage: React.FC = () => {
             links.forEach((l: any) => {
                 const s = l.get('source'); const t = l.get('target');
                 const sid = s && s.id; const tid = t && t.id;
-                if ((sid === aId && tid === bId) || (sid === bId && tid === aId)) { suppressLinkEmitRef.current = true; try { l.remove(); } catch {} suppressLinkEmitRef.current = false; }
+                if ((sid === aId && tid === bId) || (sid === bId && tid === aId)) { suppressLinkEmitRef.current = true; try { l.remove(); } catch { } suppressLinkEmitRef.current = false; }
             });
-        } catch {}
+        } catch { }
 
         const relationType = (rel.relationType || 'asociacion') as UMLRelationType;
         const originCard = relationType === 'asociacion' ? (rel.originCard || '1..1') : undefined;
@@ -2664,25 +2700,25 @@ const ConnectedDiagramPage: React.FC = () => {
             if (originCard) labels.push({ position: 0.15, attrs: { text: { text: originCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
             if (destCard) labels.push({ position: 0.85, attrs: { text: { text: destCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
             if (verb) labels.push({ position: 0.5, attrs: { text: { text: verb, fill: '#111', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#fff', stroke: '#e5e7eb', strokeWidth: 1, rx: 6, ry: 6, opacity: 0.9 } } });
-            
+
             // Agregar botón de eliminación
             if (myRole === 'creador' || myRole === 'editor') {
                 labels.push({
                     position: verb ? 0.35 : 0.5,
                     attrs: {
-                        text: { 
-                            text: '❌', 
-                            fill: '#dc3545', 
-                            fontSize: 14, 
+                        text: {
+                            text: '❌',
+                            fill: '#dc3545',
+                            fontSize: 14,
                             fontWeight: 'bold',
                             cursor: 'pointer'
                         },
-                        rect: { 
-                            fill: '#ffffff', 
-                            stroke: '#dc3545', 
-                            strokeWidth: 1, 
-                            rx: 8, 
-                            ry: 8, 
+                        rect: {
+                            fill: '#ffffff',
+                            stroke: '#dc3545',
+                            strokeWidth: 1,
+                            rx: 8,
+                            ry: 8,
                             opacity: 0.9,
                             cursor: 'pointer'
                         }
@@ -2693,8 +2729,8 @@ const ConnectedDiagramPage: React.FC = () => {
                     ]
                 });
             }
-            
-            try { link.labels(labels as any); } catch {}
+
+            try { link.labels(labels as any); } catch { }
         } else {
             // Para otros tipos de relación, solo agregar botón de eliminación
             if (myRole === 'creador' || myRole === 'editor') {
@@ -2702,19 +2738,19 @@ const ConnectedDiagramPage: React.FC = () => {
                     link.labels([{
                         position: 0.5,
                         attrs: {
-                            text: { 
-                                text: '❌', 
-                                fill: '#dc3545', 
-                                fontSize: 14, 
+                            text: {
+                                text: '❌',
+                                fill: '#dc3545',
+                                fontSize: 14,
                                 fontWeight: 'bold',
                                 cursor: 'pointer'
                             },
-                            rect: { 
-                                fill: '#ffffff', 
-                                stroke: '#dc3545', 
-                                strokeWidth: 1, 
-                                rx: 8, 
-                                ry: 8, 
+                            rect: {
+                                fill: '#ffffff',
+                                stroke: '#dc3545',
+                                strokeWidth: 1,
+                                rx: 8,
+                                ry: 8,
                                 opacity: 0.9,
                                 cursor: 'pointer'
                             }
@@ -2724,7 +2760,7 @@ const ConnectedDiagramPage: React.FC = () => {
                             { tagName: 'text', selector: 'text', className: 'delete-relation-btn' }
                         ]
                     }]);
-                } catch {}
+                } catch { }
             }
         }
         link.connector('smooth');
@@ -2735,7 +2771,7 @@ const ConnectedDiagramPage: React.FC = () => {
         // Actualiza estado estructurado
         setRelations(prev => {
             const newRel: UMLRelation = {
-                id: `r-${Date.now()}-${Math.random().toString(36).slice(2,6)}`,
+                id: `r-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
                 fromDisplayId: origen.displayId,
                 toDisplayId: destino.displayId,
                 type: relationType,
@@ -2743,7 +2779,7 @@ const ConnectedDiagramPage: React.FC = () => {
                 destCard,
                 verb
             };
-            const filtered = prev.filter(r => !( (r.fromDisplayId === newRel.fromDisplayId && r.toDisplayId === newRel.toDisplayId) || (r.fromDisplayId === newRel.toDisplayId && r.toDisplayId === newRel.fromDisplayId) ));
+            const filtered = prev.filter(r => !((r.fromDisplayId === newRel.fromDisplayId && r.toDisplayId === newRel.toDisplayId) || (r.fromDisplayId === newRel.toDisplayId && r.toDisplayId === newRel.fromDisplayId)));
             return [...filtered, newRel];
         });
 
@@ -2760,10 +2796,10 @@ const ConnectedDiagramPage: React.FC = () => {
                     verb
                 };
                 const payload: DiagramUpdate = { projectId: pidNumRel, userId: Number(localStorage.getItem('userId') || 0), diagramData: { relation: minimalRel }, changeType: 'create_relation', elementId: undefined, timestamp: new Date().toISOString() };
-                try { if (socketService.isConnected() && !socketService.isInProject(pidNumRel)) socketService.joinProject(pidNumRel); } catch {}
+                try { if (socketService.isConnected() && !socketService.isInProject(pidNumRel)) socketService.joinProject(pidNumRel); } catch { }
                 socketService.sendDiagramUpdate(payload);
                 scheduleAutoSave();
-            } catch {}
+            } catch { }
         }
     };
 
@@ -2782,7 +2818,7 @@ const ConnectedDiagramPage: React.FC = () => {
                 const s = l.get('source'); const t = l.get('target');
                 const sid = s && s.id; const tid = t && t.id;
                 if ((sid === aId && tid === bId) || (sid === bId && tid === aId)) {
-                    suppressLinkEmitRef.current = true; try { l.remove(); removed = true; } catch {} suppressLinkEmitRef.current = false;
+                    suppressLinkEmitRef.current = true; try { l.remove(); removed = true; } catch { } suppressLinkEmitRef.current = false;
                 }
             });
             if (removed) {
@@ -2791,12 +2827,12 @@ const ConnectedDiagramPage: React.FC = () => {
                 if (pid) {
                     const minimal = { fromDisplayId: origen.displayId, toDisplayId: destino.displayId };
                     const payload: DiagramUpdate = { projectId: pid, userId: Number(localStorage.getItem('userId') || 0), diagramData: minimal, changeType: 'delete_relation', elementId: undefined, timestamp: new Date().toISOString() };
-                    try { if (socketService.isConnected() && !socketService.isInProject(pid)) socketService.joinProject(pid); } catch {}
+                    try { if (socketService.isConnected() && !socketService.isInProject(pid)) socketService.joinProject(pid); } catch { }
                     socketService.sendDiagramUpdate(payload);
                     scheduleAutoSave();
                 }
             }
-        } catch {}
+        } catch { }
     };
 
     const downloadDiagramAsJSON = (_graph: joint.dia.Graph | null) => {
@@ -2819,7 +2855,7 @@ const ConnectedDiagramPage: React.FC = () => {
                     // Broadcast import to collaborators
                     const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
                     if (pidNum) {
-                        try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch {}
+                        try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch { }
                         const payload: DiagramUpdate = {
                             projectId: pidNum,
                             userId: Number(localStorage.getItem('userId') || 0),
@@ -2835,19 +2871,19 @@ const ConnectedDiagramPage: React.FC = () => {
                         setActivities(getActivities(String(pidNum)));
                         scheduleAutoSave();
                         // Recargar para rehidratar desde servidor y asegurar render en tiempo real
-                        setTimeout(() => { try { window.location.reload(); } catch {} }, 800);
+                        setTimeout(() => { try { window.location.reload(); } catch { } }, 800);
                     }
                 } else {
                     // Intento de compatibilidad con JSON de JointJS
                     const normalized = normalizeDiagramJSON(json);
-                    try { (paper as any)?.freeze?.(); } catch {}
+                    try { (paper as any)?.freeze?.(); } catch { }
                     graph.fromJSON(normalized);
-                    try { (paper as any)?.unfreeze?.(); } catch {}
+                    try { (paper as any)?.unfreeze?.(); } catch { }
                     rebuildStateFromGraph(graph);
                     // Broadcast as structured model after rebuilding
                     const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
                     if (pidNum) {
-                        try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch {}
+                        try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch { }
                         const model = buildModelFromCurrent();
                         const payload: DiagramUpdate = {
                             projectId: pidNum,
@@ -2864,12 +2900,12 @@ const ConnectedDiagramPage: React.FC = () => {
                         setActivities(getActivities(String(pidNum)));
                         scheduleAutoSave();
                         // Recargar para rehidratar desde servidor y asegurar render en tiempo real
-                        setTimeout(() => { try { window.location.reload(); } catch {} }, 800);
+                        setTimeout(() => { try { window.location.reload(); } catch { } }, 800);
                     }
                 }
             }
             // Permitir volver a importar el mismo archivo si es necesario
-            try { if (event?.target) (event.target as HTMLInputElement).value = ''; } catch {}
+            try { if (event?.target) (event.target as HTMLInputElement).value = ''; } catch { }
         };
         reader.readAsText(file);
     };
@@ -2936,19 +2972,19 @@ const ConnectedDiagramPage: React.FC = () => {
                         if (typeof data === 'string') {
                             data = JSON.parse(data);
                         }
-                    } catch {}
+                    } catch { }
                     if (data && typeof data === 'object' && Array.isArray((data as any).classes)) {
                         // Cargar desde modelo estructurado
                         console.log('Loading structured model from server...');
                         renderFromModel(data as DiagramModel, graph, showButtons);
-                        
+
                         // Unfreeze and force update for initial load
                         setTimeout(() => {
                             try {
                                 console.log('Unfreezing paper after initial load...');
                                 if (paper) {
                                     paper.unfreeze();
-                                    
+
                                     // Force redraw all elements
                                     const elements = graph.getElements();
                                     console.log('Initial load: forcing update of', elements.length, 'elements');
@@ -2958,42 +2994,42 @@ const ConnectedDiagramPage: React.FC = () => {
                                             view.update();
                                         }
                                     });
-                                    
+
                                     // Force a complete redraw
                                     try {
                                         (paper as any).dumpViews();
                                         (paper as any).renderViews();
-                                    } catch {}
+                                    } catch { }
                                 }
                             } catch (err) {
                                 console.error('Error during initial paper update:', err);
                             }
                         }, 100);
-                        
+
                     } else if (data && typeof data === 'object') {
                         // Compatibilidad: JSON de JointJS anterior
                         console.log('Loading legacy JointJS format from server...');
                         const normalized = normalizeDiagramJSON(data);
-                        try { 
+                        try {
                             if (paper) {
-                                paper.freeze(); 
+                                paper.freeze();
                             }
-                        } catch {}
+                        } catch { }
                         try { (graph as any).fromJSON?.(normalized); } catch (e) { console.warn('fromJSON falló, JSON no es de JointJS', e); }
                         try {
                             const elements = (graph as any).getElements ? (graph as any).getElements() : [];
                             elements.forEach((el: any) => ensureClassMarkup(el, showButtons));
-                        } catch {}
+                        } catch { }
                         rebuildStateFromGraph(graph);
-                        
+
                         // Unfreeze after processing
                         setTimeout(() => {
-                            try { 
+                            try {
                                 if (paper) {
                                     paper.unfreeze();
                                     console.log('Paper unfrozen after legacy format load');
                                 }
-                            } catch {}
+                            } catch { }
                         }, 100);
                     } else {
                         // Formato desconocido: limpiar
@@ -3135,7 +3171,7 @@ const ConnectedDiagramPage: React.FC = () => {
             ...attrs.map(a => `${a.name}: ${a.type}`)
         ];
         const newMethods = cls.methods;
-    const labelText = toLabelText(cls.name, newAttrsText.map(parseAttrString));
+        const labelText = toLabelText(cls.name, newAttrsText.map(parseAttrString));
         const fontSize = 12;
         const paddingX = 20; const paddingY = 30;
         const lines = labelText.split('\n');
@@ -3152,14 +3188,16 @@ const ConnectedDiagramPage: React.FC = () => {
                 { tagName: 'text', selector: 'label' },
                 { tagName: 'rect', selector: 'idBg' },
                 { tagName: 'text', selector: 'idBadge' },
-                { tagName: 'g', children: [
-                    { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: (width - 55), y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
-                    { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: (width - 30), y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
-                ]}
+                {
+                    tagName: 'g', children: [
+                        { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { class: 'edit-btn', x: (width - 55), y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
+                        { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { class: 'delete-btn', x: (width - 30), y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
+                    ]
+                }
             ];
             (cls.element as any).markup = baseMarkup;
             clampElementInside(cls.element);
-        } catch {}
+        } catch { }
         // Actualiza estado
         setClasses(prev => prev.map(c => c.displayId === displayId ? { ...c, attributes: newAttrsText } : c));
         // Broadcast edición mínima
@@ -3180,10 +3218,10 @@ const ConnectedDiagramPage: React.FC = () => {
                     elementId: displayId,
                     timestamp: new Date().toISOString()
                 };
-                try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch {}
+                try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch { }
                 socketService.sendDiagramUpdate(payload);
                 scheduleAutoSave();
-            } catch {}
+            } catch { }
         }
     };
 
@@ -3191,110 +3229,118 @@ const ConnectedDiagramPage: React.FC = () => {
         <div className='diagrama-contenedor'>
             {/* Sidebar (oculto para rol vista) */}
             {myRole !== 'vista' && (
-            <aside className="sidebar">
-                <h3>Herramientas UML</h3>
-                <div className="sidebar-actions-row">
-                    <button onClick={nuevaClase} className="btn btn-primary">➕ Nueva Clase</button>
-                    <button onClick={() => navigate('/dashboard')} className="btn btn-secondary">← Volver</button>
-                </div>
-                <div className="sidebar-section">
-                    <div className="sidebar-title">Relaciones</div>
-                    <div className="field">
-                        <label>Tipo de relación</label>
-                        <select value={relationType} onChange={e => setRelationType(e.target.value)} className="control">
-                            <option value="asociacion">Asociación</option>
-                            <option value="herencia">Herencia</option>
-                            <option value="agregacion">Agregación</option>
-                            <option value="composicion">Composición</option>
-                        </select>
+                <aside className="sidebar">
+                    <h3>Herramientas UML</h3>
+                    <div className="sidebar-actions-row">
+                        <button onClick={nuevaClase} className="btn btn-primary">➕ Nueva Clase</button>
+                        <button onClick={() => navigate('/dashboard')} className="btn btn-secondary">← Volver</button>
                     </div>
-                    <div className="field">
-                        <label>Card. origen</label>
-                        {relationType === 'asociacion' ? (
-                            <input type="text" value={originCard} onChange={e => setOriginCard(e.target.value)} className="input-sm" placeholder="1..*" />
-                        ) : (
-                            <input type="text" value={originCard} disabled className="input-sm" placeholder="--" />
-                        )}
-                    </div>
-                    <div className="field">
-                        <label>Card. destino</label>
-                        {relationType === 'asociacion' ? (
-                            <input type="text" value={destCard} onChange={e => setDestCard(e.target.value)} className="input-sm" placeholder="1..*" />
-                        ) : (
-                            <input type="text" value={destCard} disabled className="input-sm" placeholder="--" />
-                        )}
-                    </div>
-                    {relationType === 'asociacion' && (
+                    <div className="sidebar-section">
+                        <div className="sidebar-title">Relaciones</div>
                         <div className="field">
-                            <label>Verbo</label>
+                            <label>Tipo de relación</label>
+                            <select value={relationType} onChange={e => setRelationType(e.target.value)} className="control">
+                                <option value="asociacion">Asociación</option>
+                                <option value="herencia">Herencia</option>
+                                <option value="agregacion">Agregación</option>
+                                <option value="composicion">Composición</option>
+                            </select>
+                        </div>
+                        <div className="field">
+                            <label>Card. origen</label>
+                            {relationType === 'asociacion' ? (
+                                <input type="text" value={originCard} onChange={e => setOriginCard(e.target.value)} className="input-sm" placeholder="1..*" />
+                            ) : (
+                                <input type="text" value={originCard} disabled className="input-sm" placeholder="--" />
+                            )}
+                        </div>
+                        <div className="field">
+                            <label>Card. destino</label>
+                            {relationType === 'asociacion' ? (
+                                <input type="text" value={destCard} onChange={e => setDestCard(e.target.value)} className="input-sm" placeholder="1..*" />
+                            ) : (
+                                <input type="text" value={destCard} disabled className="input-sm" placeholder="--" />
+                            )}
+                        </div>
+                        {relationType === 'asociacion' && (
+                            <div className="field">
+                                <label>Verbo</label>
+                                <input
+                                    type="text"
+                                    value={relationVerb}
+                                    onChange={e => setRelationVerb(e.target.value)}
+                                    className="control"
+                                    placeholder="p. ej. contiene"
+                                />
+                            </div>
+                        )}
+                        <div className="field">
+                            <label>Número origen</label>
                             <input
-                                type="text"
-                                value={relationVerb}
-                                onChange={e => setRelationVerb(e.target.value)}
-                                className="control"
-                                placeholder="p. ej. contiene"
+                                type="number"
+                                value={originNum}
+                                onChange={e => setOriginNum(e.target.value)}
+                                className={`input-sm ${originNum ? '' : 'input-error'}`}
                             />
                         </div>
-                    )} 
-                    <div className="field">
-                        <label>Número origen</label>
-                        <input
-                            type="number"
-                            value={originNum}
-                            onChange={e => setOriginNum(e.target.value)}
-                            className={`input-sm ${originNum ? '' : 'input-error'}`}
-                        />
+                        <div className="field">
+                            <label>Número destino</label>
+                            <input
+                                type="number"
+                                value={destNum}
+                                onChange={e => setDestNum(e.target.value)}
+                                className={`input-sm ${destNum ? '' : 'input-error'}`}
+                            />
+                        </div>
+                        <button
+                            onClick={crearRelacion}
+                            disabled={!originNum || !destNum}
+                            className="btn btn-block btn-accent"
+                            title={!originNum || !destNum ? 'Completa los números para dibujar' : 'Dibujar relación'}
+                        >
+                            🔗 Dibujar Relación
+                        </button>
                     </div>
-                    <div className="field">
-                        <label>Número destino</label>
-                        <input
-                            type="number"
-                            value={destNum}
-                            onChange={e => setDestNum(e.target.value)}
-                            className={`input-sm ${destNum ? '' : 'input-error'}`}
-                        />
-                    </div>
-                    <button
-                        onClick={crearRelacion}
-                        disabled={!originNum || !destNum}
-                        className="btn btn-block btn-accent"
-                        title={!originNum || !destNum ? 'Completa los números para dibujar' : 'Dibujar relación'}
-                    >
-                        🔗 Dibujar Relación
-                    </button>
-                </div>
 
-                {/* Opciones de importación y exportación */}
-                <div className="sidebar-section">
-                    <div className="sidebar-title">Archivo / Proyecto</div>
-                    <button onClick={() => downloadDiagramAsJSON(graph)} className="btn btn-block" title="Exportar diagrama como JSON">
-                        <FiDownload /> <span>Exportar JSON</span>
-                    </button>
-                    <label className="btn btn-block btn-import" title="Importar diagrama desde JSON">
-                        <FiUpload /> <span>Importar JSON</span>
-                        <input type="file" accept="application/json" onChange={e => uploadDiagramFromJSON(e, graph)} className="file-input-hidden" />
-                    </label>
-                    <button onClick={() => saveProject(graph)} className="btn btn-block btn-primary" title="Guardar proyecto">
-                        💾 Guardar Proyecto
-                    </button>
-                    <button
-                        onClick={() => {
-                            if (projectId) {
-                                navigate(`/generate/${projectId}`);
-                            } else {
-                                alert('Primero abre o guarda un proyecto para generar el backend.');
-                            }
-                        }}
-                        className="btn btn-block"
-                        title="Generar Backend (Spring Boot)"
-                        style={{
-                            backgroundColor: '#6db33f',
-                            color: 'white',
-                            border: '1px solid #6db33f'
-                        }}
-                    >🍃 Generar Backend</button>
-                </div>
-            </aside>
+                    {/* Opciones de importación y exportación */}
+                    <div className="sidebar-section">
+                        <div className="sidebar-title">Archivo / Proyecto</div>
+                        <button onClick={() => downloadDiagramAsJSON(graph)} className="btn btn-block" title="Exportar diagrama como JSON">
+                            <FiDownload /> <span>Exportar JSON</span>
+                        </button>
+                        <label className="btn btn-block btn-import" title="Importar diagrama desde JSON">
+                            <FiUpload /> <span>Importar JSON</span>
+                            <input type="file" accept="application/json" onChange={e => uploadDiagramFromJSON(e, graph)} className="file-input-hidden" />
+                        </label>
+                        <button
+                            className="btn btn-block btn-primary"
+                            title="Importar Imagen"
+                            onClick={() => setShowImportImageModal(true)}
+                        >
+                            Importar Imagen
+                        </button>
+                        <button onClick={() => saveProject(graph)} className="btn btn-block btn-primary" title="Guardar proyecto">
+                            💾 Guardar Proyecto
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                if (projectId) {
+                                    navigate(`/generate/${projectId}`);
+                                } else {
+                                    alert('Primero abre o guarda un proyecto para generar el backend.');
+                                }
+                            }}
+                            className="btn btn-block"
+                            title="Generar Backend (Spring Boot)"
+                            style={{
+                                backgroundColor: '#6db33f',
+                                color: 'white',
+                                border: '1px solid #6db33f'
+                            }}
+                        >🍃 Generar Backend</button>
+                    </div>
+                </aside>
             )}
 
             {/* Canvas wrapper: paper host + overlays */}
@@ -3472,7 +3518,7 @@ const ConnectedDiagramPage: React.FC = () => {
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
                                 <button onClick={fetchClassRecommendations} disabled={classRecoLoading} style={{ background: '#0284c7', color: '#fff', border: 0, borderRadius: 6, padding: '6px 10px' }}>{classRecoLoading ? 'Cargando…' : 'Actualizar'}</button>
-                        <button onClick={addAllSuggestedClasses} disabled={classRecoLoading || classRecoList.length === 0} style={{ background: '#10b981', color: '#fff', border: 0, borderRadius: 6, padding: '6px 10px' }}>{classRecoLoading ? 'Aplicando…' : 'Agregar todas + relaciones'}</button>
+                                <button onClick={addAllSuggestedClasses} disabled={classRecoLoading || classRecoList.length === 0} style={{ background: '#10b981', color: '#fff', border: 0, borderRadius: 6, padding: '6px 10px' }}>{classRecoLoading ? 'Aplicando…' : 'Agregar todas + relaciones'}</button>
                                 <button onClick={() => setOpenClassReco(false)} style={{ border: '1px solid #e5e7eb', background: '#fff', borderRadius: 6, padding: '6px 10px' }}>Cerrar</button>
                             </div>
                         </div>
@@ -3721,8 +3767,8 @@ const ConnectedDiagramPage: React.FC = () => {
                                 if (pid && displayId != null) {
                                     const attrs: UMLAttribute[] = editModal.attributesArr.map(a => ({ name: a.name.trim(), type: (a.type || 'Any').trim() }));
                                     const methods: UMLMethod[] = editModal.methodsArr.map(m => ({ name: m.name.trim(), returns: (m.returns || 'void').trim() }));
-                                    let size: { width:number;height:number } | undefined;
-                                    try { const s = editModal.element.size ? editModal.element.size() : undefined; if (s) size = { width: s.width, height: s.height }; } catch {}
+                                    let size: { width: number; height: number } | undefined;
+                                    try { const s = editModal.element.size ? editModal.element.size() : undefined; if (s) size = { width: s.width, height: s.height }; } catch { }
                                     const payload: DiagramUpdate = {
                                         projectId: Number(pid),
                                         userId: Number(localStorage.getItem('userId') || 0),
@@ -3733,7 +3779,7 @@ const ConnectedDiagramPage: React.FC = () => {
                                     };
                                     socketService.sendDiagramUpdate(payload);
                                 }
-                            } catch (err) {}
+                            } catch (err) { }
                         }}>
                             <label>Título:</label>
                             <input type="text" value={editModal.title} onChange={e => setEditModal({ ...editModal, title: e.target.value })} />
@@ -3757,7 +3803,7 @@ const ConnectedDiagramPage: React.FC = () => {
                                             arr[idx] = { ...arr[idx], type: e.target.value };
                                             return { ...m, attributesArr: arr };
                                         })} />
-                                        <button type="button" onClick={() => setEditModal(m => ({ ...m, attributesArr: m.attributesArr.filter((_, i) => i !== idx) }))} title="Eliminar" style={{ padding: 6 , backgroundColor: 'red'}}>
+                                        <button type="button" onClick={() => setEditModal(m => ({ ...m, attributesArr: m.attributesArr.filter((_, i) => i !== idx) }))} title="Eliminar" style={{ padding: 6, backgroundColor: 'red' }}>
                                             <FcDeleteDatabase />
                                         </button>
                                     </div>
@@ -3881,68 +3927,68 @@ const ConnectedDiagramPage: React.FC = () => {
                             })}
                         </div>
                         {isOwner && (
-                        <div className='collab-form'>
-                            <input placeholder='Email del colaborador (requerido)' value={collabDraft.email} onChange={e => setCollabDraft(d => ({...d, email: e.target.value}))} />
-                            <select value={collabDraft.role} onChange={e => setCollabDraft(d => ({...d, role: e.target.value as any}))}>
-                                <option value='editor'>Editor</option>
-                                <option value='vista'>Vista</option>
-                            </select>
-                            <button className='ai-btn primary' onClick={async () => {
-                                // Preferir projectId de la URL (param) y fallback a localStorage
-                                const pidRaw = (typeof projectId !== 'undefined' && projectId) ? projectId : getActiveProjectId();
-                                if (!pidRaw || !collabDraft.email?.trim()) {
-                                    alert('Por favor ingresa el correo del usuario a invitar y asegúrate de estar en un proyecto válido.');
-                                    return;
-                                }
-                                const pidNum = Number(pidRaw);
-                                if (Number.isNaN(pidNum) || pidNum <= 0) {
-                                    alert('ID de proyecto inválido. Recarga la página o abre el proyecto desde el panel de proyectos.');
-                                    return;
-                                }
-
-                                // Verificar token presente
-                                const token = localStorage.getItem('token');
-                                if (!token) {
-                                    alert('No estás autenticado. Inicia sesión antes de invitar colaboradores.');
-                                    return;
-                                }
-
-                                try {
-                                    // Obtener permisos disponibles y elegir según rol
-                                    const permisos = await invitationApi.getPermissions();
-                                    const roleLower = collabDraft.role?.toLowerCase() || 'editor';
-                                    let permisoEncontrado = permisos.find(p => (p.nombre || '').toLowerCase().includes(roleLower));
-                                    if (!permisoEncontrado) permisoEncontrado = permisos[0];
-                                    const permisoId = permisoEncontrado ? permisoEncontrado.id : 2;
-
-                                    // Enviar invitación al backend (usa solo email)
-                                    await invitationApi.sendInvitation({ projectId: pidNum, toUserEmail: collabDraft.email.trim(), permissionId: permisoId, mensaje: `Invitación para colaborar como ${collabDraft.role}` });
-
-                                    // Registrar actividad localmente
-                                    addActivity(String(pidNum), { type: 'note', message: `Invitación enviada a ${collabDraft.email.trim()} como ${collabDraft.role}`, by: undefined });
-                                    setActivities(getActivities(String(pidNum)));
-
-                                    // Limpiar formulario
-                                    setCollabDraft({ name: '', email: '', role: 'editor' });
-
-                                    // Refrescar invitaciones en el store
-                                    dispatch(fetchSentInvitations() as any);
-                                    dispatch(fetchReceivedInvitations() as any);
-                                    // Intentar refrescar colaboradores si el backend los incluye inmediatamente al aceptar; por ahora solo recargamos lista
-                                    await loadServerCollaborators();
-                                } catch (err: any) {
-                                    console.error('Error enviando invitación:', err);
-                                    const status = err?.response?.status;
-                                    if (status === 403) {
-                                        alert('No tienes permisos para invitar: el servidor respondió 403 (Solo el creador puede enviar invitaciones). Asegúrate de estar en el proyecto correcto y ser el creador.');
-                                    } else if (status === 404) {
-                                        alert('Usuario destinatario no encontrado en el sistema (404). El correo debe corresponder a un usuario registrado.');
-                                    } else {
-                                        alert('No se pudo enviar la invitación. Revisa la consola para más detalles.');
+                            <div className='collab-form'>
+                                <input placeholder='Email del colaborador (requerido)' value={collabDraft.email} onChange={e => setCollabDraft(d => ({ ...d, email: e.target.value }))} />
+                                <select value={collabDraft.role} onChange={e => setCollabDraft(d => ({ ...d, role: e.target.value as any }))}>
+                                    <option value='editor'>Editor</option>
+                                    <option value='vista'>Vista</option>
+                                </select>
+                                <button className='ai-btn primary' onClick={async () => {
+                                    // Preferir projectId de la URL (param) y fallback a localStorage
+                                    const pidRaw = (typeof projectId !== 'undefined' && projectId) ? projectId : getActiveProjectId();
+                                    if (!pidRaw || !collabDraft.email?.trim()) {
+                                        alert('Por favor ingresa el correo del usuario a invitar y asegúrate de estar en un proyecto válido.');
+                                        return;
                                     }
-                                }
-                            }}>Agregar</button>
-                         </div>
+                                    const pidNum = Number(pidRaw);
+                                    if (Number.isNaN(pidNum) || pidNum <= 0) {
+                                        alert('ID de proyecto inválido. Recarga la página o abre el proyecto desde el panel de proyectos.');
+                                        return;
+                                    }
+
+                                    // Verificar token presente
+                                    const token = localStorage.getItem('token');
+                                    if (!token) {
+                                        alert('No estás autenticado. Inicia sesión antes de invitar colaboradores.');
+                                        return;
+                                    }
+
+                                    try {
+                                        // Obtener permisos disponibles y elegir según rol
+                                        const permisos = await invitationApi.getPermissions();
+                                        const roleLower = collabDraft.role?.toLowerCase() || 'editor';
+                                        let permisoEncontrado = permisos.find(p => (p.nombre || '').toLowerCase().includes(roleLower));
+                                        if (!permisoEncontrado) permisoEncontrado = permisos[0];
+                                        const permisoId = permisoEncontrado ? permisoEncontrado.id : 2;
+
+                                        // Enviar invitación al backend (usa solo email)
+                                        await invitationApi.sendInvitation({ projectId: pidNum, toUserEmail: collabDraft.email.trim(), permissionId: permisoId, mensaje: `Invitación para colaborar como ${collabDraft.role}` });
+
+                                        // Registrar actividad localmente
+                                        addActivity(String(pidNum), { type: 'note', message: `Invitación enviada a ${collabDraft.email.trim()} como ${collabDraft.role}`, by: undefined });
+                                        setActivities(getActivities(String(pidNum)));
+
+                                        // Limpiar formulario
+                                        setCollabDraft({ name: '', email: '', role: 'editor' });
+
+                                        // Refrescar invitaciones en el store
+                                        dispatch(fetchSentInvitations() as any);
+                                        dispatch(fetchReceivedInvitations() as any);
+                                        // Intentar refrescar colaboradores si el backend los incluye inmediatamente al aceptar; por ahora solo recargamos lista
+                                        await loadServerCollaborators();
+                                    } catch (err: any) {
+                                        console.error('Error enviando invitación:', err);
+                                        const status = err?.response?.status;
+                                        if (status === 403) {
+                                            alert('No tienes permisos para invitar: el servidor respondió 403 (Solo el creador puede enviar invitaciones). Asegúrate de estar en el proyecto correcto y ser el creador.');
+                                        } else if (status === 404) {
+                                            alert('Usuario destinatario no encontrado en el sistema (404). El correo debe corresponder a un usuario registrado.');
+                                        } else {
+                                            alert('No se pudo enviar la invitación. Revisa la consola para más detalles.');
+                                        }
+                                    }
+                                }}>Agregar</button>
+                            </div>
                         )}
                     </div>
                 )}
@@ -3972,6 +4018,37 @@ const ConnectedDiagramPage: React.FC = () => {
                     </div>
                 )}
             </section>
+            {showImportImageModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 transition-opacity">
+                    <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md mx-4 relative flex flex-col items-center">
+                        <h2 className="text-2xl font-bold mb-4 text-center text-blue-700">Importar Imagen</h2>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageChange}
+                            className="mb-4 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                        />
+                        {previewUrl && (
+                            <img src={previewUrl} alt="Preview" className="mb-4 rounded-lg shadow max-h-48 object-contain" />
+                        )}
+                        <div className="flex gap-4 w-full justify-center">
+                            <button
+                                onClick={handleUpload}
+                                disabled={!selectedImage}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold shadow hover:bg-blue-700 transition disabled:opacity-50"
+                            >
+                                Subir Imagen
+                            </button>
+                            <button
+                                onClick={() => { setShowImportImageModal(false); setSelectedImage(null); setPreviewUrl(null); }}
+                                className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-semibold shadow hover:bg-gray-400 transition"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
