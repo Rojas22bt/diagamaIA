@@ -40,7 +40,6 @@ export const login = async ( req : Request, res: Response ) =>{
  }
 
 
- // Obtener todos los usuarios (protegido)
 export const getUsers = async (req: Request, res: Response) => {
     try {
         const users = await prisma.usuario.findMany({
