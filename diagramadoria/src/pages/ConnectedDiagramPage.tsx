@@ -8,6 +8,7 @@ import { saveAs } from 'file-saver';
 import '../styles/DiagramCss.css'
 import AudioIAPage from './AudioIAPage'
 import ChatBotPanel from '../components/chat/ChatBotPanel'
+import ImportImageModal from '../components/diagram/ImportImageModal'
 import 'jointjs/dist/joint.css'
 import type { ActionSuggestion } from '../ai/openaiClient'
 import { suggestAttributesForClasses, type AttributeSuggestion, suggestClassesFromProjectTitle, type ClassSuggestion, suggestRelationsFromProjectTitle, type RelationSuggestion } from '../ai/openaiClient'
@@ -114,27 +115,36 @@ const ConnectedDiagramPage: React.FC = () => {
         return pid ? getActivities(pid) : [];
     });
     const [showImportImageModal, setShowImportImageModal] = useState(false);
-const [selectedImage, setSelectedImage] = useState<File | null>(null);
-const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setSelectedImage(file);
-    if (file) {
-        setPreviewUrl(URL.createObjectURL(file));
-    } else {
-        setPreviewUrl(null);
-    }
-};
+    // Handlers para el modal de importar imagen
+    const handleUploadImage = (file: File) => {
+        // Aquí puedes implementar la lógica para procesar la imagen
+        console.log('Imagen subida:', file.name);
+        alert('Imagen subida: ' + file.name);
+        // TODO: Implementar procesamiento de imagen (OCR, conversión a diagrama, etc.)
+    };
 
-const handleUpload = () => {
-    if (selectedImage) {
-        alert('Imagen subida: ' + selectedImage.name);
-        setShowImportImageModal(false);
-        setSelectedImage(null);
-        setPreviewUrl(null);
-    }
-};
+    const handleAnalyzeImageWithAI = async (file: File) => {
+        // Aquí puedes implementar la lógica de análisis con IA
+        console.log('Analizando imagen con IA:', file.name);
+        
+        try {
+            // TODO: Llamar a tu API de IA para analizar la imagen
+            // Ejemplo:
+            // const result = await analyzeImageWithAI(file);
+            // Procesar el resultado y crear clases/relaciones en el diagrama
+            
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Simulación
+            alert('Análisis completado. Se detectaron elementos del diagrama.');
+            
+            // Aquí podrías crear clases basadas en el análisis de la IA
+            // Por ejemplo: crear clases detectadas en la imagen
+        } catch (error) {
+            console.error('Error al analizar imagen:', error);
+            alert('Error al analizar la imagen con IA');
+        }
+    };
+
     // Helper para mostrar etiqueta de usuario (preferir correo sobre nombre/ID)
     const getUserDisplay = (userId?: number) => {
         // Si no tenemos ID, intenta usar el usuario local (puede ser yo mismo)
@@ -4018,6 +4028,16 @@ const handleUpload = () => {
                     </div>
                 )}
             </section>
+<<<<<<< HEAD
+
+            {/* Modal de Importar Imagen */}
+            <ImportImageModal
+                isOpen={showImportImageModal}
+                onClose={() => setShowImportImageModal(false)}
+                onUpload={handleUploadImage}
+                onAnalyzeWithAI={handleAnalyzeImageWithAI}
+            />
+=======
             {showImportImageModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 transition-all duration-300">
                     <div className="bg-white rounded-2xl w-full max-w-lg mx-auto relative flex flex-col border border-blue-200 overflow-hidden">
@@ -4087,6 +4107,7 @@ const handleUpload = () => {
                     </div>
                 </div>
             )}
+>>>>>>> 68aa817d7cc9e37b64a700a06497f08b20004ec2
         </div>
     )
 }
