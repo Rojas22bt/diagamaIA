@@ -8,7 +8,7 @@ import { saveAs } from 'file-saver';
 import '../styles/DiagramCss.css'
 import AudioIAPage from './AudioIAPage'
 import ChatBotPanel from '../components/chat/ChatBotPanel'
-import ImportImageModal from '../components/diagram/ImportImageModal'
+import ImportImageModal from '../components/IA-Imagen/imagenPage'
 import 'jointjs/dist/joint.css'
 import type { ActionSuggestion } from '../ai/openaiClient'
 import { suggestAttributesForClasses, type AttributeSuggestion, suggestClassesFromProjectTitle, type ClassSuggestion, suggestRelationsFromProjectTitle, type RelationSuggestion } from '../ai/openaiClient'
