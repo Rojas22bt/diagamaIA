@@ -8,6 +8,7 @@ import { saveAs } from 'file-saver';
 import '../styles/DiagramCss.css'
 import AudioIAPage from './AudioIAPage'
 import ChatBotPanel from '../components/chat/ChatBotPanel'
+import ImportImageModal from '../components/diagram/ImportImageModal'
 import 'jointjs/dist/joint.css'
 import type { ActionSuggestion } from '../ai/openaiClient'
 import { suggestAttributesForClasses, type AttributeSuggestion, suggestClassesFromProjectTitle, type ClassSuggestion, suggestRelationsFromProjectTitle, type RelationSuggestion } from '../ai/openaiClient'
@@ -114,27 +115,36 @@ const ConnectedDiagramPage: React.FC = () => {
         return pid ? getActivities(pid) : [];
     });
     const [showImportImageModal, setShowImportImageModal] = useState(false);
-const [selectedImage, setSelectedImage] = useState<File | null>(null);
-const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setSelectedImage(file);
-    if (file) {
-        setPreviewUrl(URL.createObjectURL(file));
-    } else {
-        setPreviewUrl(null);
-    }
-};
+    // Handlers para el modal de importar imagen
+    const handleUploadImage = (file: File) => {
+        // Aquí puedes implementar la lógica para procesar la imagen
+        console.log('Imagen subida:', file.name);
+        alert('Imagen subida: ' + file.name);
+        // TODO: Implementar procesamiento de imagen (OCR, conversión a diagrama, etc.)
+    };
 
-const handleUpload = () => {
-    if (selectedImage) {
-        alert('Imagen subida: ' + selectedImage.name);
-        setShowImportImageModal(false);
-        setSelectedImage(null);
-        setPreviewUrl(null);
-    }
-};
+    const handleAnalyzeImageWithAI = async (file: File) => {
+        // Aquí puedes implementar la lógica de análisis con IA
+        console.log('Analizando imagen con IA:', file.name);
+        
+        try {
+            // TODO: Llamar a tu API de IA para analizar la imagen
+            // Ejemplo:
+            // const result = await analyzeImageWithAI(file);
+            // Procesar el resultado y crear clases/relaciones en el diagrama
+            
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Simulación
+            alert('Análisis completado. Se detectaron elementos del diagrama.');
+            
+            // Aquí podrías crear clases basadas en el análisis de la IA
+            // Por ejemplo: crear clases detectadas en la imagen
+        } catch (error) {
+            console.error('Error al analizar imagen:', error);
+            alert('Error al analizar la imagen con IA');
+        }
+    };
+
     // Helper para mostrar etiqueta de usuario (preferir correo sobre nombre/ID)
     const getUserDisplay = (userId?: number) => {
         // Si no tenemos ID, intenta usar el usuario local (puede ser yo mismo)
@@ -4018,37 +4028,14 @@ const handleUpload = () => {
                     </div>
                 )}
             </section>
-            {showImportImageModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 transition-opacity">
-                    <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-md mx-4 relative flex flex-col items-center">
-                        <h2 className="text-2xl font-bold mb-4 text-center text-blue-700">Importar Imagen</h2>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageChange}
-                            className="mb-4 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                        />
-                        {previewUrl && (
-                            <img src={previewUrl} alt="Preview" className="mb-4 rounded-lg shadow max-h-48 object-contain" />
-                        )}
-                        <div className="flex gap-4 w-full justify-center">
-                            <button
-                                onClick={handleUpload}
-                                disabled={!selectedImage}
-                                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold shadow hover:bg-blue-700 transition disabled:opacity-50"
-                            >
-                                Subir Imagen
-                            </button>
-                            <button
-                                onClick={() => { setShowImportImageModal(false); setSelectedImage(null); setPreviewUrl(null); }}
-                                className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg font-semibold shadow hover:bg-gray-400 transition"
-                            >
-                                Cancelar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+
+            {/* Modal de Importar Imagen */}
+            <ImportImageModal
+                isOpen={showImportImageModal}
+                onClose={() => setShowImportImageModal(false)}
+                onUpload={handleUploadImage}
+                onAnalyzeWithAI={handleAnalyzeImageWithAI}
+            />
         </div>
     )
 }
