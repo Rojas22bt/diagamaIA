@@ -1,6 +1,6 @@
 import axiosInstance from './axiosInstance';
 
-// Tipos normalizados para el frontend
+// Tipos normalizados para el frontende
 export interface Invitation {
   id: number;
   project_id: number;
