@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { fetchGeminiVisionJSON } from '../../services/geminiClient';
+import socketService from '../../services/socketService';
 
 export type ImportImageModalProps = {
   isOpen: boolean;
@@ -122,27 +123,47 @@ Reglas:
 
 Ejemplo de referencia (SOLO estructura):\n${JSON.stringify(example)}\n`;
 
-const ImportImageModal: React.FC<ImportImageModalProps> = ({ isOpen, onClose, onUpload, onAnalyzeWithAI }) => {
+
+const ImportImageModal: React.FC<ImportImageModalProps> = ({ isOpen, onClose, onAnalyzeWithAI }) => {
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState('');
+  const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  // Nuevo estado para el JSON de la IA y el estado de espera
+  const [aiJsonData, setAiJsonData] = useState<DiagramModel | null>(null);
+  const [jsonReady, setJsonReady] = useState(false);
 
-  useEffect(() => { if (!isOpen) { setFile(null); setPreview(''); setError(''); setLoading(false); setResult(''); } }, [isOpen]);
+  useEffect(() => {
+    if (!isOpen) {
+      setFile(null);
+      setError('');
+      setLoading(false);
+      setAiJsonData(null);
+      setJsonReady(false);
+    }
+  }, [isOpen]);
+
+  // useEffect para importar automáticamente el JSON cuando esté listo
+  useEffect(() => {
+    if (jsonReady && aiJsonData && window.dispatchEvent) {
+      const event = new CustomEvent('import-uml-json', { detail: aiJsonData });
+      window.dispatchEvent(event);
+      setJsonReady(false); // Reset para evitar reimportar
+    }
+  }, [jsonReady, aiJsonData]);
 
   const onFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
     setFile(f);
-    setPreview(f ? URL.createObjectURL(f) : '');
   }, []);
 
   const toDataUrl = (f: File) => new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = reject; r.readAsDataURL(f); });
 
   const handleAnalyze = async () => {
     if (!file) return;
+    setStatusMsg(null);
     try {
-      setLoading(true); setError(''); setResult('');
+  setLoading(true); setError('');
       const dataUrl = await toDataUrl(file);
       const example = {
         version: 1,
@@ -157,56 +178,81 @@ const ImportImageModal: React.FC<ImportImageModalProps> = ({ isOpen, onClose, on
       const text = await fetchGeminiVisionJSON({ dataUrl, prompt });
       const parsed = extractFencedOrFirstJson(text);
       const model = parsed ? normalizeToDiagramModel(parsed) : undefined;
-      const pretty = JSON.stringify(model ?? parsed ?? { error: 'No se pudo interpretar JSON de la IA' }, null, 2);
-      setResult(pretty);
+      setStatusMsg('¡Análisis realizado con éxito!');
       if (onAnalyzeWithAI) onAnalyzeWithAI(file, model ?? parsed);
-    } catch (e: any) { setError(e?.message || String(e)); }
+      // Guardar el modelo en el estado y marcarlo como listo para importar
+      if (model) {
+        // Emitir por socket para todos los usuarios (si hay proyecto y conexión)
+        try {
+          let pid: number | null = null;
+          try {
+            const url = window.location.pathname;
+            const match = url.match(/project[s]?\/?(\d+)/i);
+            if (match) pid = Number(match[1]);
+          } catch {}
+          if (!pid && window.localStorage) {
+            pid = Number(window.localStorage.getItem('activeProjectId') || 0);
+          }
+          if (pid && socketService && socketService.sendDiagramUpdate) {
+            // Asegurar sala unida
+            try { if (socketService.isConnected() && !socketService.isInProject(pid)) socketService.joinProject(pid); } catch {}
+            socketService.sendDiagramUpdate({
+              projectId: pid,
+              userId: Number(window.localStorage.getItem('userId') || 0),
+              diagramData: { fullModel: model },
+              changeType: 'import_full_model',
+              elementId: undefined,
+              timestamp: new Date().toISOString()
+            });
+          }
+        } catch {}
+        setAiJsonData(model);
+        setJsonReady(true);
+      }
+    } catch (e: any) {
+      setError(e?.message || String(e));
+      setStatusMsg('Ocurrió un error al analizar la imagen.');
+    }
     finally { setLoading(false); }
   };
 
-  const handleUploadLocal = () => { if (file && onUpload) onUpload(file); };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm p-6" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 bg-blue-600 text-white">
-          <div className="flex items-center gap-3"><span className="text-2xl">🖼️</span><h2 className="text-xl font-semibold">Importar Imagen</h2></div>
-          <button onClick={onClose} className="p-2 rounded-md hover:bg-blue-500">✖</button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4" onClick={onClose}>
+      <div className="bg-white/90 rounded-3xl w-full max-w-4xl min-h-[480px] shadow-2xl border border-blue-200 flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-8 py-6 bg-gradient-to-r from-blue-700 to-blue-500 text-white rounded-t-3xl border-b border-blue-300">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">🖼️</span>
+            <h2 className="text-2xl font-bold tracking-wide">Importar Imagen</h2>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-blue-600 transition-colors text-xl">✖</button>
         </div>
-        <div className="p-6 space-y-4">
-          <label className="flex flex-col items-center justify-center w-full h-44 border-2 border-dashed border-blue-400 rounded-xl cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors">
-            <div className="flex flex-col items-center justify-center pt-5 pb-6">
-              <svg className="w-12 h-12 mb-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-              <p className="text-blue-700 font-semibold">Click para seleccionar o arrastra una imagen</p>
-              <p className="text-xs text-blue-500">PNG/JPG/GIF máx 10MB</p>
+        <div className="flex-1 flex flex-col justify-center px-10 py-8 gap-6">
+          <label className="flex flex-col items-center justify-center w-full h-56 border-2 border-dashed border-blue-400 rounded-2xl cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors shadow-inner">
+            <div className="flex flex-col items-center justify-center pt-6 pb-8">
+              <svg className="w-16 h-16 mb-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+              <p className="text-blue-700 font-semibold text-lg">Click para seleccionar o arrastra una imagen</p>
+              <p className="text-sm text-blue-500">PNG/JPG/GIF máx 10MB</p>
             </div>
             <input type="file" accept="image/*" className="hidden" onChange={onFileChange} />
           </label>
-          {preview && (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <p className="text-sm text-gray-600 font-semibold mb-2">Vista previa</p>
-              <img src={preview} alt="preview" className="max-h-80 w-full object-contain rounded-md" />
+          {loading && (
+            <div className="fixed inset-0 z-[60] flex flex-col items-center justify-center bg-black/60 backdrop-blur-md" style={{minHeight: '100vh'}}>
+              <div className="w-24 h-24 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mb-8"></div>
+              <span className="text-blue-100 font-bold text-2xl drop-shadow">Analizando imagen, por favor espera...</span>
             </div>
           )}
-          {error && (<div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">{error}</div>)}
-          {result && (
-            <div className="bg-slate-900 rounded-xl overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2 bg-slate-800 text-slate-100"><span className="font-semibold text-sm">JSON generado</span>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs" onClick={() => navigator.clipboard.writeText(result)}>Copiar</button>
-                  <button className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs" onClick={() => { const blob = new Blob([result], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'diagram.json'; a.click(); URL.revokeObjectURL(url); }}>Descargar</button>
-                </div>
-              </div>
-              <pre className="p-4 text-slate-200 text-xs whitespace-pre-wrap break-words">{result}</pre>
+          {statusMsg && !loading && (
+            <div className={`p-5 rounded-2xl text-center font-semibold text-xl shadow-md ${error ? 'bg-red-100 text-red-700 border border-red-300' : 'bg-green-100 text-green-700 border border-green-300'} mt-4`}>
+              {statusMsg}
             </div>
           )}
         </div>
-        <div className="flex gap-4 px-6 py-4 bg-gray-50 border-t">
-          <button onClick={handleUploadLocal} disabled={!file || loading} className="flex-1 px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50">Subir Imagen</button>
-          <button onClick={handleAnalyze} disabled={!file || loading} className="flex-1 px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">Analizar diagrama con IA</button>
-          <button onClick={onClose} className="px-6 py-3 rounded-lg bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300">Cerrar</button>
+        <div className="flex gap-6 px-10 py-6 bg-gray-50 border-t border-blue-200 rounded-b-3xl">
+          <button onClick={handleAnalyze} disabled={!file || loading} className="flex-1 px-8 py-4 rounded-xl bg-emerald-600 text-white text-lg font-bold shadow hover:bg-emerald-700 disabled:opacity-50 transition-colors">Analizar diagrama con IA</button>
+          <button onClick={onClose} className="px-8 py-4 rounded-xl bg-gray-200 text-gray-800 text-lg font-bold shadow hover:bg-gray-300 transition-colors">Cerrar</button>
         </div>
       </div>
     </div>

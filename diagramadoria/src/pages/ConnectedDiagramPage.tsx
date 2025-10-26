@@ -76,6 +76,64 @@ function measureText(text: string, fontSize: number = 15, fontFamily: string = '
 }
 
 const ConnectedDiagramPage: React.FC = () => {
+    // ...existing code...
+    // ...declaraciones de graph, graphRef, etc...
+
+    // Importar diagrama desde evento 'import-uml-json' (después de declarar graph y graphRef)
+    useEffect(() => {
+        function onImportUMLJson(e: Event) {
+            const ce = e as CustomEvent<any>;
+            const model = ce.detail as { classes?: any[]; relations?: any[]; nextDisplayId?: number } | undefined;
+            if (!model || typeof model !== 'object') return;
+            const gInst = graphRef.current;
+            const pInst = paperRef.current;
+            if (!gInst || !pInst) return;
+            try {
+                applyingRemoteRef.current = true; // evita emitir por socket al re-renderizar
+                pInst.freeze();
+                gInst.clear();
+                // Construir clases y dibujarlas con JointJS
+                const includeButtons = (roleRef.current === 'creador' || roleRef.current === 'editor');
+                const newClasses: ClassType[] = [];
+                (model.classes || []).forEach((c: any) => {
+                    const node: UMLClassNode = {
+                        id: typeof c.id === 'string' ? c.id : `c-${c.displayId}`,
+                        displayId: Number(c.displayId),
+                        name: String(c.name || 'Clase'),
+                        position: { x: Number(c.position?.x ?? 100), y: Number(c.position?.y ?? 100) },
+                        size: c.size && typeof c.size.width === 'number' && typeof c.size.height === 'number' ? { width: c.size.width, height: c.size.height } : undefined,
+                        attributes: Array.isArray(c.attributes) ? c.attributes.map((a: any) => ({ name: String(a.name || ''), type: String(a.type || 'String') })) : [],
+                        methods: Array.isArray(c.methods) ? c.methods.map((m: any) => ({ name: String(m.name || ''), returns: String(m.returns || 'void') })) : [],
+                    };
+                    const cls = addClassNode(node, gInst, includeButtons);
+                    newClasses.push(cls);
+                });
+                setClasses(newClasses);
+                // Actualizar referencia inmediata para que addRelationLink encuentre los elementos
+                classesRef.current = newClasses;
+                setNextNumber(Number(model.nextDisplayId ?? (Math.max(0, ...newClasses.map(c => c.displayId)) + 1)));
+                // Dibujar relaciones
+                (model.relations || []).forEach((r: any) => {
+                    const rel: UMLRelation = {
+                        id: String(r.id || `r-${Date.now()}`),
+                        fromDisplayId: Number(r.fromDisplayId),
+                        toDisplayId: Number(r.toDisplayId),
+                        type: (() => { const t = String(r.type || '').toLowerCase(); return (t === 'asociacion' || t === 'herencia' || t === 'agregacion' || t === 'composicion') ? (t as UMLRelation['type']) : 'asociacion'; })(),
+                        originCard: r.originCard,
+                        destCard: r.destCard,
+                        verb: r.verb,
+                    };
+                    addRelationLink(rel, gInst);
+                });
+                setRelations((model.relations || []) as any);
+            } finally {
+                try { pInst.unfreeze(); } catch {}
+                applyingRemoteRef.current = false;
+            }
+        }
+        window.addEventListener('import-uml-json', onImportUMLJson as EventListener);
+        return () => window.removeEventListener('import-uml-json', onImportUMLJson as EventListener);
+    }, []);
     const navigate = useNavigate();
     const { projectId } = useParams<{ projectId: string }>();
     const dispatch = useDispatch();
@@ -882,6 +940,47 @@ const ConnectedDiagramPage: React.FC = () => {
                         return;
                     }
 
+                    // Importar modelo completo desde IA o importación masiva
+                    if (data.changeType === 'import_full_model' && incoming && typeof incoming === 'object' && incoming.fullModel) {
+                        try {
+                            applyingRemoteRef.current = true;
+                            pInst.freeze();
+                            // Limpiar diagrama actual
+                            gInst.clear();
+                            // Cargar modelo completo de una vez
+                            const model = incoming.fullModel;
+                            const includeButtons = (roleRef.current === 'creador' || roleRef.current === 'editor');
+                            const newClasses: ClassType[] = [];
+                            (model.classes || []).forEach((c: any) => {
+                                const node: UMLClassNode = {
+                                    id: typeof c.id === 'string' ? c.id : `c-${c.displayId}`,
+                                    displayId: Number(c.displayId),
+                                    name: String(c.name || 'Clase'),
+                                    position: { x: Number(c.position?.x ?? 100), y: Number(c.position?.y ?? 100) },
+                                    size: c.size && typeof c.size.width === 'number' && typeof c.size.height === 'number' ? { width: c.size.width, height: c.size.height } : undefined,
+                                    attributes: Array.isArray(c.attributes) ? c.attributes.map((a: any) => ({ name: String(a.name || ''), type: String(a.type || 'String') })) : [],
+                                    methods: Array.isArray(c.methods) ? c.methods.map((m: any) => ({ name: String(m.name || ''), returns: String(m.returns || 'void') })) : [],
+                                };
+                                const cls = addClassNode(node, gInst, includeButtons);
+                                newClasses.push(cls);
+                            });
+                            setClasses(newClasses);
+                            classesRef.current = newClasses;
+                            setNextNumber(Number(model.nextDisplayId ?? (Math.max(0, ...newClasses.map(c => c.displayId)) + 1)));
+                            // Dibujar relaciones
+                            (model.relations || []).forEach((r: any) => {
+                                const t = String(r.type || '').toLowerCase();
+                                const type = (t === 'asociacion' || t === 'herencia' || t === 'agregacion' || t === 'composicion') ? (t as UMLRelation['type']) : 'asociacion';
+                                addRelationLink({ id: String(r.id || `r-${Date.now()}`), fromDisplayId: Number(r.fromDisplayId), toDisplayId: Number(r.toDisplayId), type, originCard: r.originCard, destCard: r.destCard, verb: r.verb }, gInst);
+                            });
+                            setRelations((model.relations || []) as any);
+                        } catch (e) { console.error('Error applying import_full_model:', e); }
+                        finally {
+                            try { pInst.unfreeze(); } catch { }
+                            applyingRemoteRef.current = false;
+                        }
+                        return;
+                    }
                     // Fast-path create_class: add only new class if payload matches
                     if (data.changeType === 'create_class' && incoming && typeof incoming === 'object') {
                         try {
