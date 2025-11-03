@@ -3349,6 +3349,23 @@ const ConnectedDiagramPage: React.FC = () => {
                                 border: '1px solid #6db33f'
                             }}
                         >🍃 Generar Backend</button>
+
+                        <button
+                            onClick={() => {
+                                if (projectId) {
+                                    navigate(`/generate-frontend/${projectId}`);
+                                } else {
+                                    alert('Primero abre o guarda un proyecto para generar el frontend.');
+                                }
+                            }}
+                            className="btn btn-block"
+                            title="Generar Frontend (Flutter)"
+                            style={{
+                                backgroundColor: '#02569B',
+                                color: 'white',
+                                border: '1px solid #02569B'
+                            }}
+                        >🐦 Generar Frontend Flutter</button>
                     </div>
                 </aside>
             )}

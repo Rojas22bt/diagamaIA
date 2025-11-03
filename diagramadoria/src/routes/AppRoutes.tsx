@@ -6,6 +6,7 @@ import ProjectDashboard from "../pages/ProjectDashboard"
 import InvitationPanel from "../components/dashboard/InvitationPanel"
 import GenerationBackendSprintBoot from "../pages/GenerationBackendSprintBoot"
 import ChatBotPage from "../pages/ChatBotPage"
+import GenerationFrontendFlutter from "../pages/GenerationFrontendFlutter"
 
 const AppRoutes = () => {
     return (
@@ -17,6 +18,7 @@ const AppRoutes = () => {
             <Route path="/projects/:projectId/invite" element={<InvitationPanel />} />
             <Route path="/diagram/:projectId" element={<ConnectedDiagramPage />} />
             <Route path="/generate/:projectId" element={<GenerationBackendSprintBoot />} />
+            <Route path="/generate-frontend/:projectId" element={<GenerationFrontendFlutter />} />
             <Route path="/chatbot" element={<ChatBotPage />} />
             {/* Rutas antiguas eliminadas para evitar duplicidad */}
         </Routes>
