@@ -122,19 +122,18 @@ Reglas:
 
 Ejemplo de referencia (SOLO estructura):\n${JSON.stringify(example)}\n`;
 
-const ImportImageModal: React.FC<ImportImageModalProps> = ({ isOpen, onClose, onUpload, onAnalyzeWithAI }) => {
+const ImportImageModal: React.FC<ImportImageModalProps> = ({ isOpen, onClose, onUpload: _onUpload, onAnalyzeWithAI }) => {
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState('');
 
-  useEffect(() => { if (!isOpen) { setFile(null); setPreview(''); setError(''); setLoading(false); setResult(''); } }, [isOpen]);
+  useEffect(() => { if (!isOpen) { setFile(null); setError(''); setLoading(false); setResult(''); } }, [isOpen]);
 
   const onFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
     setFile(f);
-    setPreview(f ? URL.createObjectURL(f) : '');
+    // Ya no mostramos la vista previa; solo marcamos que hay archivo
   }, []);
 
   const toDataUrl = (f: File) => new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = reject; r.readAsDataURL(f); });
@@ -159,12 +158,17 @@ const ImportImageModal: React.FC<ImportImageModalProps> = ({ isOpen, onClose, on
       const model = parsed ? normalizeToDiagramModel(parsed) : undefined;
       const pretty = JSON.stringify(model ?? parsed ?? { error: 'No se pudo interpretar JSON de la IA' }, null, 2);
       setResult(pretty);
-      if (onAnalyzeWithAI) onAnalyzeWithAI(file, model ?? parsed);
+      if (onAnalyzeWithAI) {
+        // Entregar el modelo/JSON al padre para que pinte el diagrama
+        onAnalyzeWithAI(file, model ?? parsed);
+        // Cerrar el modal para mostrar el diagrama inmediatamente
+        onClose();
+      }
     } catch (e: any) { setError(e?.message || String(e)); }
     finally { setLoading(false); }
   };
 
-  const handleUploadLocal = () => { if (file && onUpload) onUpload(file); };
+  // No hay botón de "Subir"; el flujo es seleccionar y analizar.
 
   if (!isOpen) return null;
 
@@ -179,17 +183,20 @@ const ImportImageModal: React.FC<ImportImageModalProps> = ({ isOpen, onClose, on
           <label className="flex flex-col items-center justify-center w-full h-44 border-2 border-dashed border-blue-400 rounded-xl cursor-pointer bg-blue-50 hover:bg-blue-100 transition-colors">
             <div className="flex flex-col items-center justify-center pt-5 pb-6">
               <svg className="w-12 h-12 mb-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-              <p className="text-blue-700 font-semibold">Click para seleccionar o arrastra una imagen</p>
-              <p className="text-xs text-blue-500">PNG/JPG/GIF máx 10MB</p>
+              {!file ? (
+                <>
+                  <p className="text-blue-700 font-semibold">Click para seleccionar o arrastra una imagen</p>
+                  <p className="text-xs text-blue-500">PNG/JPG/GIF máx 10MB</p>
+                </>
+              ) : (
+                <div className="flex flex-col items-center">
+                  <span className="text-green-700 font-semibold">Imagen cargada</span>
+                  <span className="text-xs text-gray-600 mt-1">{file.name}</span>
+                </div>
+              )}
             </div>
             <input type="file" accept="image/*" className="hidden" onChange={onFileChange} />
           </label>
-          {preview && (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
-              <p className="text-sm text-gray-600 font-semibold mb-2">Vista previa</p>
-              <img src={preview} alt="preview" className="max-h-80 w-full object-contain rounded-md" />
-            </div>
-          )}
           {error && (<div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-md text-sm">{error}</div>)}
           {result && (
             <div className="bg-slate-900 rounded-xl overflow-hidden">
@@ -204,11 +211,20 @@ const ImportImageModal: React.FC<ImportImageModalProps> = ({ isOpen, onClose, on
           )}
         </div>
         <div className="flex gap-4 px-6 py-4 bg-gray-50 border-t">
-          <button onClick={handleUploadLocal} disabled={!file || loading} className="flex-1 px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50">Subir Imagen</button>
           <button onClick={handleAnalyze} disabled={!file || loading} className="flex-1 px-6 py-3 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 disabled:opacity-50">Analizar diagrama con IA</button>
           <button onClick={onClose} className="px-6 py-3 rounded-lg bg-gray-200 text-gray-800 font-semibold hover:bg-gray-300">Cerrar</button>
         </div>
       </div>
+
+      {loading && (
+        <div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 9999 }}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative px-6 py-4 rounded-xl shadow-xl bg-white/90 backdrop-blur-md border border-gray-200 flex items-center gap-3">
+            <span className="inline-block h-5 w-5 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
+            <span className="font-semibold text-gray-700">Por favor esperar, cargando…</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -124,24 +124,55 @@ const ConnectedDiagramPage: React.FC = () => {
         // TODO: Implementar procesamiento de imagen (OCR, conversión a diagrama, etc.)
     };
 
-    const handleAnalyzeImageWithAI = async (file: File) => {
-        // Aquí puedes implementar la lógica de análisis con IA
+    const handleAnalyzeImageWithAI = async (file: File, result?: any) => {
         console.log('Analizando imagen con IA:', file.name);
-        
         try {
-            // TODO: Llamar a tu API de IA para analizar la imagen
-            // Ejemplo:
-            // const result = await analyzeImageWithAI(file);
-            // Procesar el resultado y crear clases/relaciones en el diagrama
-            
-            await new Promise(resolve => setTimeout(resolve, 2000)); // Simulación
-            alert('Análisis completado. Se detectaron elementos del diagrama.');
-            
-            // Aquí podrías crear clases basadas en el análisis de la IA
-            // Por ejemplo: crear clases detectadas en la imagen
+            if (!graph || !paper) {
+                alert('El lienzo del diagrama aún no está listo. Intenta nuevamente.');
+                return;
+            }
+
+            // Si el modal nos envía el JSON/Modelo, úsalo para pintar automáticamente
+            const pInst = paper;
+            const gInst = graph;
+
+            applyingRemoteRef.current = true;
+            try { pInst.freeze(); } catch { }
+
+            let incoming: any = result;
+            if (typeof incoming === 'string') {
+                try { incoming = JSON.parse(incoming); } catch { /* ignore */ }
+            }
+
+            if (incoming && Array.isArray(incoming.classes)) {
+                // Modelo estructurado
+                const showButtons = roleRef.current === 'creador' || roleRef.current === 'editor';
+                renderFromModel(incoming as DiagramModel, gInst, showButtons);
+            } else if (incoming && typeof incoming === 'object') {
+                // Posible JSON de joint.js (cells)
+                const normalized = normalizeDiagramJSON(incoming);
+                try { gInst.fromJSON(normalized); } catch { }
+                rebuildStateFromGraph(gInst);
+            } else {
+                console.warn('Resultado de IA no reconocido, no se realizaron cambios.');
+            }
+
+            setTimeout(() => {
+                try {
+                    pInst.unfreeze();
+                    const els = gInst.getElements();
+                    els.forEach(el => { const v = pInst.findViewByModel(el); if (v) v.update(); });
+                } catch { }
+                applyingRemoteRef.current = false;
+            }, 150);
+
+            // Cerrar el modal si sigue abierto
+            setShowImportImageModal(false);
         } catch (error) {
-            console.error('Error al analizar imagen:', error);
+            console.error('Error al aplicar resultado de IA:', error);
             alert('Error al analizar la imagen con IA');
+            try { paper?.unfreeze(); } catch { }
+            applyingRemoteRef.current = false;
         }
     };
 
