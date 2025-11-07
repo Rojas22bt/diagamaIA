@@ -148,11 +148,50 @@ const ConnectedDiagramPage: React.FC = () => {
                 // Modelo estructurado
                 const showButtons = roleRef.current === 'creador' || roleRef.current === 'editor';
                 renderFromModel(incoming as DiagramModel, gInst, showButtons);
+                // Broadcast to collaborators
+                const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
+                if (pidNum) {
+                    try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch { }
+                    const payload: DiagramUpdate = {
+                        projectId: pidNum,
+                        userId: Number(localStorage.getItem('userId') || 0),
+                        diagramData: incoming,
+                        changeType: 'import',
+                        elementId: undefined,
+                        timestamp: new Date().toISOString()
+                    };
+                    socketService.sendDiagramUpdate(payload);
+                    const selfId = Number(localStorage.getItem('userId') || 0);
+                    const selfName = getUserDisplay(selfId);
+                    addActivity(String(pidNum), { type: 'note', message: `${selfName} importó un diagrama con IA`, byUserId: selfId, byName: selfName });
+                    setActivities(getActivities(String(pidNum)));
+                    scheduleAutoSave();
+                }
             } else if (incoming && typeof incoming === 'object') {
                 // Posible JSON de joint.js (cells)
                 const normalized = normalizeDiagramJSON(incoming);
                 try { gInst.fromJSON(normalized); } catch { }
                 rebuildStateFromGraph(gInst);
+                // Broadcast as structured model after rebuilding
+                const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
+                if (pidNum) {
+                    try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch { }
+                    const model = buildModelFromCurrent();
+                    const payload: DiagramUpdate = {
+                        projectId: pidNum,
+                        userId: Number(localStorage.getItem('userId') || 0),
+                        diagramData: model,
+                        changeType: 'import',
+                        elementId: undefined,
+                        timestamp: new Date().toISOString()
+                    };
+                    socketService.sendDiagramUpdate(payload);
+                    const selfId = Number(localStorage.getItem('userId') || 0);
+                    const selfName = getUserDisplay(selfId);
+                    addActivity(String(pidNum), { type: 'note', message: `${selfName} importó un diagrama con IA`, byUserId: selfId, byName: selfName });
+                    setActivities(getActivities(String(pidNum)));
+                    scheduleAutoSave();
+                }
             } else {
                 console.warn('Resultado de IA no reconocido, no se realizaron cambios.');
             }
