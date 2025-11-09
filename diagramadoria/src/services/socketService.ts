@@ -42,9 +42,9 @@ class SocketService {
   // - Puedes crear un archivo .env en diagramadoria con: VITE_BACKEND_URL=http://localhost:3000
   // - O puedes forzar la URL local al llamar: socketService.connect(token, 'http://localhost:3000')
   // - Si prefieres, descomenta la siguiente línea para usar localhost como fallback en dev:
-   const endpoint = url || normalizedEnv || 'http://localhost:3000';
+  //  const endpoint = url || normalizedEnv || 'http://localhost:3000';
 
-  //const endpoint = url || normalizedEnv || 'https://diagamaia.onrender.com';
+  const endpoint = url || normalizedEnv || 'https://diagamaia.onrender.com';
     console.log('Conectando a Socket.IO en:', endpoint);
     
     this.socket = io(endpoint, { 
