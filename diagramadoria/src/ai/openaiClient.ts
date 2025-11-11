@@ -375,6 +375,11 @@ const SYSTEM_PROMPT = `Eres un asistente que transforma instrucciones en españo
 
 Robustez requerida:
 - Acepta errores ortográficos o de audio comunes (ASR). Interpreta "tabla", "entidad", "modelo" como clase.
+- Reconoce comandos de eliminación: "eliminar", "borrar", "quitar", "remover", "delete", "remove" seguidos de "clase", "tabla" y número o nombre.
+- Reconoce comandos de atributos:
+  * Agregar: "añadir", "agregar", "añade", "agrega", "crear", "add" seguido de "atributo", "campo", "propiedad"
+  * Actualizar: "actualizar", "cambiar", "modificar", "update", "editar" seguido de "atributo", "campo"
+  * Eliminar: "eliminar", "borrar", "quitar", "remover", "delete" seguido de "atributo", "campo"
 - Si dan atributos sin tipo, INFIERE el tipo más probable: usa Int, Float, String, Bool, Date o DateTime.
   - id, numero, nro, código -> Int
   - edad, cantidad -> Int
@@ -410,6 +415,32 @@ Usuario: nueva tabla Casa atributos: id, color, altura
 JSON: {"type":"create_class","name":"Casa","attributes":[{"name":"id","type":"Int"},{"name":"color","type":"String"},{"name":"altura","type":"Float"}]}
 Usuario: relaciona 1 con 2 como herencia 1..* a 1..1
 JSON: {"type":"create_relation","originNumber":1,"destNumber":2,"relationType":"herencia","originCard":"1..*","destCard":"1..1"}
+Usuario: eliminar clase 1
+JSON: {"type":"delete_class","targetNumber":1}
+Usuario: eliminar clase Persona
+JSON: {"type":"delete_class","targetName":"Persona"}
+Usuario: borra la tabla Usuario
+JSON: {"type":"delete_class","targetName":"Usuario"}
+Usuario: quitar clase 3
+JSON: {"type":"delete_class","targetNumber":3}
+Usuario: añadir atributo nombre a la clase 2
+JSON: {"type":"add_attribute","targetNumber":2,"attribute":{"name":"nombre","type":"String"}}
+Usuario: agregar atributo id, edad a clase Usuario
+JSON: {"type":"add_attribute","targetNumber":null,"targetName":"Usuario","attribute":{"name":"id","type":"Int"}}
+Usuario: añade atributo precio tipo Float a clase 1
+JSON: {"type":"add_attribute","targetNumber":1,"attribute":{"name":"precio","type":"Float"}}
+Usuario: actualizar atributo nombre por nombreCompleto en clase 2
+JSON: {"type":"update_attribute","targetNumber":2,"fromName":"nombre","toName":"nombreCompleto"}
+Usuario: cambiar tipo de edad a Float en clase Persona
+JSON: {"type":"update_attribute","targetName":"Persona","fromName":"edad","dataType":"Float"}
+Usuario: eliminar atributo edad de clase 1
+JSON: {"type":"delete_attribute","targetNumber":1,"name":"edad"}
+Usuario: borrar atributo nombre de clase Usuario
+JSON: {"type":"delete_attribute","targetName":"Usuario","name":"nombre"}
+Usuario: agregar método calcular():Float a clase 2
+JSON: {"type":"add_method","targetNumber":2,"method":{"name":"calcular","returns":"Float"}}
+Usuario: eliminar método calcular de clase 1
+JSON: {"type":"delete_method","targetNumber":1,"name":"calcular"}
 `;
 
 function removeAccents(str: string) {
@@ -557,11 +588,20 @@ export async function suggestActionsFromText(userText: string): Promise<ActionSu
   const MULTI_PROMPT = `Eres un asistente que convierte una INSTRUCCIÓN en español en una LISTA de acciones JSON.
 Responde SOLO con un arreglo JSON ([]). Cada elemento debe seguir UNO de estos formatos:
 - { "type": "create_class", "name": string, "attributes"?: [{"name": string, "type": "Int|Float|String|Bool|Date|DateTime"}] }
+- { "type": "delete_class", "targetNumber"?: number, "targetName"?: string }
+- { "type": "add_attribute", "targetNumber"?: number, "targetName"?: string, "attribute": {"name": string, "type": "Int|Float|String|Bool|Date|DateTime"} }
+- { "type": "update_attribute", "targetNumber"?: number, "targetName"?: string, "fromName": string, "toName"?: string, "dataType"?: string }
+- { "type": "delete_attribute", "targetNumber"?: number, "targetName"?: string, "name": string }
+- { "type": "add_method", "targetNumber"?: number, "targetName"?: string, "method": {"name": string, "returns": string} }
+- { "type": "delete_method", "targetNumber"?: number, "targetName"?: string, "name": string }
 - { "type": "create_relation", "originNumber": number, "destNumber": number, "relationType": "asociacion"|"herencia"|"agregacion"|"composicion", "originCard"?: string, "destCard"?: string, "verb"?: string }
 - { "type": "delete_relation", "originNumber": number, "destNumber": number }
 
 Reglas:
 - Si la instrucción menciona varias clases/tablas (separadas por comas o conectores), devuelve múltiples objetos create_class (uno por clase).
+- Si la instrucción menciona múltiples atributos separados por comas (ej: "id, nombre, edad"), devuelve múltiples objetos add_attribute (uno por atributo).
+- Reconoce comandos de eliminación: "eliminar", "borrar", "quitar", "remover" seguidos de "clase", "tabla" y número o nombre.
+- Reconoce comandos de atributos: "añadir", "agregar", "eliminar", "borrar", "actualizar", "cambiar" seguidos de "atributo", "campo", "propiedad".
 - Normaliza tipos de atributos y relación como en el prompt anterior. Si asociación sin cardinalidades, usa 1..1 por defecto.
 - Si no entiendes, devuelve [].
 Ejemplos:
@@ -571,8 +611,24 @@ Salida: [
   {"type":"create_class","name":"Producto"},
   {"type":"create_class","name":"Factura"}
 ]
+Entrada: "eliminar clase 1 y eliminar clase Persona"
+Salida: [
+  {"type":"delete_class","targetNumber":1},
+  {"type":"delete_class","targetName":"Persona"}
+]
 Entrada: "relaciona 1 con 2 como composicion 1..* a 1..1"
-Salida: [{"type":"create_relation","originNumber":1,"destNumber":2,"relationType":"composicion","originCard":"1..*","destCard":"1..1"}]`;
+Salida: [{"type":"create_relation","originNumber":1,"destNumber":2,"relationType":"composicion","originCard":"1..*","destCard":"1..1"}]
+Entrada: "añadir atributo id, nombre, edad a la clase 2"
+Salida: [
+  {"type":"add_attribute","targetNumber":2,"attribute":{"name":"id","type":"Int"}},
+  {"type":"add_attribute","targetNumber":2,"attribute":{"name":"nombre","type":"String"}},
+  {"type":"add_attribute","targetNumber":2,"attribute":{"name":"edad","type":"Int"}}
+]
+Entrada: "eliminar atributo nombre de clase 1 y agregar atributo precio a clase 2"
+Salida: [
+  {"type":"delete_attribute","targetNumber":1,"name":"nombre"},
+  {"type":"add_attribute","targetNumber":2,"attribute":{"name":"precio","type":"Float"}}
+]`;
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
