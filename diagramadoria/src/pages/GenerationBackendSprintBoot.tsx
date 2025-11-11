@@ -29,12 +29,54 @@ type UMLRelation = {
   destCard?: string;
   verb?: string;
 };
+
 type DiagramModel = {
   version: 1;
   nextDisplayId: number;
   classes: UMLClassNode[];
   relations: UMLRelation[];
 };
+
+// --- NUEVO: Forzar campo 'id' y normalizar nombres a minúsculas ---
+function normalizeAndForceId(diagram: DiagramModel): DiagramModel {
+  const newClasses = diagram.classes.map(cls => {
+    // Normalizar nombre de clase a minúsculas
+    const normalizedName = cls.name.toLowerCase();
+    // Normalizar atributos a minúsculas y forzar 'id' si falta
+    let hasId = cls.attributes.some(a => toFieldName(a.name) === 'id');
+    const newAttributes = cls.attributes.map(a => ({
+      name: a.name.toLowerCase(),
+      type: a.type.toLowerCase()
+    }));
+    if (!hasId) {
+      newAttributes.unshift({ name: 'id', type: 'int' });
+    }
+    // Normalizar métodos
+    const newMethods = cls.methods.map(m => ({
+      name: m.name.toLowerCase(),
+      returns: m.returns.toLowerCase()
+    }));
+    return {
+      ...cls,
+      name: normalizedName,
+      attributes: newAttributes,
+      methods: newMethods
+    };
+  });
+  // Normalizar relaciones
+  const newRelations = diagram.relations.map(rel => ({
+    ...rel,
+    type: rel.type.toLowerCase() as UMLRelationType,
+    verb: rel.verb ? rel.verb.toLowerCase() : rel.verb,
+    originCard: rel.originCard ? rel.originCard.toLowerCase() : rel.originCard,
+    destCard: rel.destCard ? rel.destCard.toLowerCase() : rel.destCard
+  }));
+  return {
+    ...diagram,
+    classes: newClasses,
+    relations: newRelations
+  };
+}
 
 /* ==============================
  *  Configuración del Proyecto
@@ -1437,6 +1479,11 @@ public class GlobalExceptionHandler {
   useEffect(() => {
     loadProjectData();
   }, [loadProjectData]);
+
+  // --- NUEVO: Aplicar normalización y forzar 'id' tras cargar el diagrama ---
+  useEffect(() => {
+    setDiagramModel(prev => normalizeAndForceId(prev));
+  }, [loading]);
 
   const loadDiagramFromStorage = () => {
     try {

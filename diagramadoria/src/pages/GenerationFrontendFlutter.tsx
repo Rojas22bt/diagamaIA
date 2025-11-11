@@ -44,8 +44,48 @@ type FlutterConfig = {
 const DEFAULT_FLUTTER_CONFIG: FlutterConfig = {
   appName: 'UML Flutter App',
   appId: 'com.example.umlflutterapp',
-  apiBaseUrl: 'http://localhost:8080/api'
+  apiBaseUrl: 'http://10.0.2.2:8000/api' // Cambiado para emulador Android
 };
+// --- NUEVO: Forzar campo 'id' y normalizar nombres a minúsculas ---
+function normalizeAndForceId(diagram: DiagramModel): DiagramModel {
+  const newClasses = diagram.classes.map(cls => {
+    // Normalizar nombre de clase a minúsculas
+    const normalizedName = cls.name.toLowerCase();
+    // Normalizar atributos a minúsculas y forzar 'id' si falta
+    let hasId = cls.attributes.some(a => toFieldName(a.name) === 'id');
+    const newAttributes = cls.attributes.map(a => ({
+      name: a.name.toLowerCase(),
+      type: a.type.toLowerCase()
+    }));
+    if (!hasId) {
+      newAttributes.unshift({ name: 'id', type: 'int' });
+    }
+    // Normalizar métodos
+    const newMethods = cls.methods.map(m => ({
+      name: m.name.toLowerCase(),
+      returns: m.returns.toLowerCase()
+    }));
+    return {
+      ...cls,
+      name: normalizedName,
+      attributes: newAttributes,
+      methods: newMethods
+    };
+  });
+  // Normalizar relaciones
+  const newRelations = diagram.relations.map(rel => ({
+    ...rel,
+    type: rel.type.toLowerCase() as UMLRelationType,
+    verb: rel.verb ? rel.verb.toLowerCase() : rel.verb,
+    originCard: rel.originCard ? rel.originCard.toLowerCase() : rel.originCard,
+    destCard: rel.destCard ? rel.destCard.toLowerCase() : rel.destCard
+  }));
+  return {
+    ...diagram,
+    classes: newClasses,
+    relations: newRelations
+  };
+}
 
 const RESERVED_TABLE_NAMES: Record<string, string> = { order: 'orders', user: 'users' };
 
@@ -815,6 +855,11 @@ const GenerationFrontendFlutter: React.FC = () => {
 
   useEffect(() => { loadProjectData(); }, [loadProjectData]);
 
+  // --- NUEVO: Aplicar normalización y forzar 'id' tras cargar el diagrama ---
+  useEffect(() => {
+    setDiagramModel(prev => normalizeAndForceId(prev));
+  }, [loading]);
+
   const generateFlutterZip = async () => {
     if (isGenerating) return;
     if (diagramModel.classes.length === 0) { alert('No hay clases para generar.'); return; }
@@ -906,7 +951,7 @@ const GenerationFrontendFlutter: React.FC = () => {
             <div className="form-group">
               <label>API Base URL</label>
               <input type="text" value={cfg.apiBaseUrl} onChange={e => setCfg(prev => ({ ...prev, apiBaseUrl: e.target.value }))}/>
-              <small>Ej: http://localhost:8080/api</small>
+              <small>http://10.0.2.2:8080/api</small>
             </div>
           </div>
         </div>
