@@ -11,7 +11,7 @@ import ChatBotPanel from '../components/chat/ChatBotPanel'
 import ImportImageModal from '../components/IA-Imagen/imagenPage'
 import 'jointjs/dist/joint.css'
 import type { ActionSuggestion } from '../ai/openaiClient'
-import { suggestAttributesForClasses, type AttributeSuggestion, suggestClassesFromProjectTitle, type ClassSuggestion, suggestRelationsFromProjectTitle, type RelationSuggestion } from '../ai/openaiClient'
+import { suggestAttributesForClasses, type AttributeSuggestion, suggestClassesFromProjectTitle, type ClassSuggestion, suggestRelationsFromProjectTitle, type RelationSuggestion, applyActionToDiagram } from '../ai/openaiClient'
 import { addActivity, setActiveProjectId, getActiveProjectId, getActivities } from '../utils/collaboration'
 import { projectApi } from '../api/projectApi';
 import { invitationApi } from '../api/invitationApi';
@@ -2253,115 +2253,51 @@ const ConnectedDiagramPage: React.FC = () => {
             if (!action) return;
             // Proteger: solo creador/editor pueden ejecutar acciones IA que modifican el diagrama
             if (!(myRole === 'creador' || myRole === 'editor')) return;
-            if (action.type === 'create_class') {
-                // Crear clase con datos sugeridos
-                if (!graph) return;
-                const id = Date.now();
-                const name = action.name || 'Clase';
-                const x = 120 + classes.length * 60;
-                const y = 120 + classes.length * 60;
-                const displayId = nextNumber;
-                const attributes = (action.attributes || []).map(a => `${a.name}: ${a.type || 'Any'}`);
-                const labelText = `${name}\n-----------------------\n${attributes.join('\n')}`;
-                const fontSize = 12;
-                const paddingX = 20;
-                const paddingY = 30;
-                const lines = labelText.split('\n');
-                let maxLineWidth = 0;
-                lines.forEach(line => {
-                    const { width } = measureText(line, fontSize);
-                    if (width > maxLineWidth) maxLineWidth = width;
-                });
-                const width = Math.max(220, maxLineWidth + paddingX);
-                const height = fontSize * lines.length + paddingY;
+            // Aplicar cualquier acción contra el modelo estructurado y re-renderizar completo
+            const gInst = graphRef.current;
+            const pInst = paperRef.current;
+            if (!gInst || !pInst) return;
+            try {
+                applyingRemoteRef.current = true;
+                try { pInst.freeze(); } catch { }
 
-                const rect = new joint.shapes.standard.Rectangle();
-                rect.position(x, y);
-                rect.resize(width, height);
-                rect.attr({
-                    body: {
-                        fill: '#fff', stroke: '#3986d3', strokeWidth: 2, rx: 20, ry: 20,
-                        filter: { name: 'dropShadow', args: { dx: 0, dy: 2, blur: 2, color: '#3986d3', opacity: 0.15 } }
-                    },
-                    label: { text: labelText, fontWeight: 'bold', fontSize, fill: '#2477c3', fontFamily: 'monospace', xAlignment: 'middle' },
-                    idBg: { x: 10, y: 10, width: 26, height: 18, fill: '#2477c3', rx: 4, ry: 4 },
-                    idBadge: { text: String(displayId), x: 23, y: 23, fontSize: 12, fontWeight: 'bold', fill: '#ffffff', textAnchor: 'middle' }
-                });
-                rect.markup = [
-                    { tagName: 'rect', selector: 'body' },
-                    { tagName: 'text', selector: 'label' },
-                    { tagName: 'rect', selector: 'idBg' },
-                    { tagName: 'text', selector: 'idBadge' },
-                    {
-                        tagName: 'g', children: [
-                            { tagName: 'text', selector: 'editIcon', className: 'edit-btn', attributes: { x: width - 55, y: 22, fontSize: 20, fill: '#007bff', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '⚙️' },
-                            { tagName: 'text', selector: 'deleteIcon', className: 'delete-btn', attributes: { x: width - 30, y: 22, fontSize: 20, fill: '#dc3545', fontWeight: 'bold', textAnchor: 'middle', cursor: 'pointer' }, textContent: '❌' }
-                        ]
-                    }
-                ];
-                rect.addTo(graph);
-                clampElementInside(rect);
-                setClasses(prev => [...prev, { id, name, x, y, displayId, attributes, methods: [], element: rect }]);
-                setNextNumber(n => n + 1);
-                const pidNumAI = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
-                if (pidNumAI) {
+                const current = buildModelFromCurrent();
+                const updated = applyActionToDiagram(action, current);
+
+                // Render con botones según rol
+                const showButtons = roleRef.current === 'creador' || roleRef.current === 'editor';
+                renderFromModel(updated, gInst, showButtons);
+
+                // Broadcast modelo completo para sincronizar a colaboradores
+                const pidNum = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
+                if (pidNum) {
+                    try { if (socketService.isConnected() && !socketService.isInProject(pidNum)) socketService.joinProject(pidNum); } catch { }
+                    const payload: DiagramUpdate = {
+                        projectId: pidNum,
+                        userId: Number(localStorage.getItem('userId') || 0),
+                        diagramData: updated,
+                        changeType: 'import',
+                        elementId: undefined,
+                        timestamp: new Date().toISOString()
+                    };
+                    try { socketService.sendDiagramUpdate(payload); } catch { }
                     const selfId = Number(localStorage.getItem('userId') || 0);
                     const selfName = getUserDisplay(selfId);
-                    addActivity(String(pidNumAI), { type: 'create_class', message: `${selfName} creó clase #${displayId} (${name})`, byUserId: selfId, byName: selfName });
-                    setActivities(getActivities(String(pidNumAI)));
-                    try {
-                        const newNode: UMLClassNode = { id: `c-${displayId}`, displayId, name, position: { x, y }, size: { width, height }, attributes: attributes.map((line: string) => parseAttrString(line)), methods: [] };
-                        const payload: DiagramUpdate = { projectId: pidNumAI, userId: Number(localStorage.getItem('userId') || 0), diagramData: { node: newNode }, changeType: 'create_class', elementId: displayId, timestamp: new Date().toISOString() };
-                        // Join room if not yet
-                        try { if (socketService.isConnected() && !socketService.isInProject(pidNumAI)) socketService.joinProject(pidNumAI); } catch { }
-                        socketService.sendDiagramUpdate(payload);
-                        // persist full model as well
-                        scheduleAutoSave();
-                    } catch { }
+                    addActivity(String(pidNum), { type: 'change', message: `${selfName} aplicó acción IA: ${action.type}`, byUserId: selfId, byName: selfName });
+                    setActivities(getActivities(String(pidNum)));
+                    scheduleAutoSave();
                 }
-                return;
-            }
-            if (action.type === 'create_relation') {
-                if (action.originNumber) setOriginNum(String(action.originNumber));
-                if (action.destNumber) setDestNum(String(action.destNumber));
-                if (action.relationType) setRelationType(action.relationType);
-                if (action.originCard) setOriginCard(action.originCard);
-                if (action.destCard) setDestCard(action.destCard);
-                if (action.verb) setRelationVerb(action.verb);
-                // crear después de un tick para que el highlight se vea
-                setTimeout(() => crearRelacion(), 50);
-                return;
-            }
-            if (action.type === 'delete_relation') {
-                if (!graph) return;
-                const origen = classes.find(c => c.displayId === Number(action.originNumber));
-                const destino = classes.find(c => c.displayId === Number(action.destNumber));
-                if (!origen?.element || !destino?.element) return;
-                try {
-                    const links = (graph as any).getLinks ? (graph as any).getLinks() : [];
-                    const aId = (origen.element as any).id;
-                    const bId = (destino.element as any).id;
-                    let removed = false;
-                    links.forEach((l: any) => {
-                        const s = l.get('source'); const t = l.get('target');
-                        const sid = s && s.id; const tid = t && t.id;
-                        if ((sid === aId && tid === bId) || (sid === bId && tid === aId)) {
-                            suppressLinkEmitRef.current = true; try { l.remove(); removed = true; } catch { } suppressLinkEmitRef.current = false;
-                        }
-                    });
-                    if (removed) {
-                        setRelations(prev => prev.filter(r => !((r.fromDisplayId === origen.displayId && r.toDisplayId === destino.displayId) || (r.fromDisplayId === destino.displayId && r.toDisplayId === origen.displayId))));
-                        const pid = projectId ? Number(projectId) : Number(getActiveProjectId() || 0);
-                        if (pid) {
-                            const minimal = { fromDisplayId: origen.displayId, toDisplayId: destino.displayId };
-                            const payload: DiagramUpdate = { projectId: pid, userId: Number(localStorage.getItem('userId') || 0), diagramData: minimal, changeType: 'delete_relation', elementId: undefined, timestamp: new Date().toISOString() };
-                            try { if (socketService.isConnected() && !socketService.isInProject(pid)) socketService.joinProject(pid); } catch { }
-                            socketService.sendDiagramUpdate(payload);
-                            scheduleAutoSave();
-                        }
-                    }
-                } catch { }
-                return;
+            } catch (err) {
+                console.error('Error aplicando acción de IA:', err);
+            } finally {
+                setTimeout(() => {
+                    try {
+                        pInst.unfreeze();
+                        // force views update
+                        gInst.getElements().forEach(el => { const v = pInst.findViewByModel(el); v?.update(); });
+                    } catch { }
+                    applyingRemoteRef.current = false;
+                }, 80);
             }
         }
         window.addEventListener('diagram-ai-action', onAIAction as EventListener);
