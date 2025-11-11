@@ -1,11 +1,275 @@
+// Tipos para diagrama UML (importados de ConnectedDiagramPage)
+export type UMLAttribute = { name: string; type: string };
+export type UMLMethod = { name: string; returns: string };
+export type UMLClassNode = {
+  id: string;
+  displayId: number;
+  name: string;
+  position: { x: number; y: number };
+  size?: { width: number; height: number };
+  attributes: UMLAttribute[];
+  methods: UMLMethod[];
+};
+export type UMLRelationType = 'asociacion' | 'herencia' | 'agregacion' | 'composicion';
+export type UMLRelation = {
+  id: string;
+  fromDisplayId: number;
+  toDisplayId: number;
+  type: UMLRelationType;
+  originCard?: string;
+  destCard?: string;
+  verb?: string;
+};
+export type DiagramModel = {
+  version: 1;
+  nextDisplayId: number;
+  classes: UMLClassNode[];
+  relations: UMLRelation[];
+};
+// Aplica una acción sugerida al modelo de diagrama UML
+export function applyActionToDiagram(action: ActionSuggestion, diagram: DiagramModel): DiagramModel {
+  let updated = { ...diagram, classes: [...diagram.classes], relations: [...diagram.relations] };
+
+  const findClassByRef = (ref: { targetNumber?: number; targetName?: string } | undefined): UMLClassNode | undefined => {
+    if (!ref) return undefined;
+    if (typeof ref.targetNumber === 'number') {
+      return updated.classes.find(c => c.displayId === ref.targetNumber);
+    }
+    if (ref.targetName) {
+      const name = ref.targetName.toLowerCase();
+      return updated.classes.find(c => c.name.toLowerCase() === name);
+    }
+    return undefined;
+  };
+
+  const resolveDisplayIdByName = (name?: string): number | undefined => {
+    if (!name) return undefined;
+    const cls = updated.classes.find(c => c.name.toLowerCase() === name.toLowerCase());
+    return cls?.displayId;
+  };
+
+  switch (action.type) {
+    case 'create_class': {
+      // Evitar duplicados por nombre (case-insensitive)
+      const exists = updated.classes.some(c => c.name.toLowerCase() === action.name.toLowerCase());
+      if (!exists) {
+        const newId = 'c-' + (updated.nextDisplayId || updated.classes.length + 1);
+        updated.classes.push({
+          id: newId,
+          displayId: updated.nextDisplayId || updated.classes.length + 1,
+          name: action.name,
+          position: { x: 100, y: 100 + 60 * updated.classes.length },
+          attributes: (action.attributes || []).map(a => ({
+            name: a.name,
+            type: a.type
+          })),
+          methods: (action.methods || []).map(m => ({
+            name: m.name,
+            returns: m.returns
+          }))
+        });
+        updated.nextDisplayId = (updated.nextDisplayId || updated.classes.length + 1) + 1;
+      }
+      break;
+    }
+    case 'create_relation': {
+      // Resolver extremos por número o nombre
+      const originId = action.originNumber ?? resolveDisplayIdByName(action.originName);
+      const destId = action.destNumber ?? resolveDisplayIdByName(action.destName);
+      const from = updated.classes.find(c => c.displayId === (originId as number));
+      const to = updated.classes.find(c => c.displayId === (destId as number));
+      if (from && to && typeof originId === 'number' && typeof destId === 'number') {
+        // Evitar duplicados
+        const exists = updated.relations.some(r =>
+          r.fromDisplayId === originId &&
+          r.toDisplayId === destId &&
+          r.type === action.relationType
+        );
+        if (!exists) {
+          updated.relations.push({
+            id: 'r-' + (updated.relations.length + 1),
+            fromDisplayId: originId,
+            toDisplayId: destId,
+            type: action.relationType || 'asociacion',
+            originCard: action.originCard,
+            destCard: action.destCard,
+            verb: action.verb
+          });
+        }
+      }
+      break;
+    }
+    case 'update_relation': {
+      const originId = action.originNumber ?? resolveDisplayIdByName(action.originName);
+      const destId = action.destNumber ?? resolveDisplayIdByName(action.destName);
+      if (typeof originId === 'number' && typeof destId === 'number') {
+        updated.relations = updated.relations.map(r => {
+          if (r.fromDisplayId === originId && r.toDisplayId === destId) {
+            return {
+              ...r,
+              type: action.relationType ?? r.type,
+              originCard: action.originCard ?? r.originCard,
+              destCard: action.destCard ?? r.destCard,
+              verb: action.verb ?? r.verb,
+            };
+          }
+          return r;
+        });
+      }
+      break;
+    }
+    case 'delete_relation': {
+      const originId = action.originNumber ?? resolveDisplayIdByName((action as any).originName);
+      const destId = action.destNumber ?? resolveDisplayIdByName((action as any).destName);
+      updated.relations = updated.relations.filter(r => !(r.fromDisplayId === originId && r.toDisplayId === destId));
+      break;
+    }
+    case 'delete_class': {
+      const cls = findClassByRef({ targetNumber: action.targetNumber, targetName: action.targetName });
+      if (cls) {
+        updated.classes = updated.classes.filter(c => c.displayId !== cls.displayId);
+        updated.relations = updated.relations.filter(r => r.fromDisplayId !== cls.displayId && r.toDisplayId !== cls.displayId);
+      }
+      break;
+    }
+    case 'rename_class': {
+      const cls = findClassByRef({ targetNumber: action.targetNumber, targetName: action.targetName });
+      if (cls) {
+        cls.name = action.newName;
+      }
+      break;
+    }
+    case 'move_class': {
+      const cls = findClassByRef({ targetNumber: action.targetNumber, targetName: action.targetName });
+      if (cls) {
+        cls.position = { x: action.x, y: action.y };
+      }
+      break;
+    }
+    case 'add_attribute': {
+      const cls = findClassByRef({ targetNumber: action.targetNumber, targetName: action.targetName });
+      if (cls) {
+        const exists = cls.attributes.some(a => a.name.toLowerCase() === action.attribute.name.toLowerCase());
+        if (!exists) cls.attributes = [...cls.attributes, { name: action.attribute.name, type: normalizeAttrType(action.attribute.type, action.attribute.name) }];
+      }
+      break;
+    }
+    case 'update_attribute': {
+      const cls = findClassByRef({ targetNumber: action.targetNumber, targetName: action.targetName });
+      if (cls) {
+        cls.attributes = cls.attributes.map(a => {
+          if (a.name.toLowerCase() === action.fromName.toLowerCase()) {
+            return {
+              name: action.toName ? action.toName : a.name,
+              type: action.dataType ? normalizeAttrType(action.dataType, action.toName || a.name) : a.type,
+            };
+          }
+          return a;
+        });
+      }
+      break;
+    }
+    case 'delete_attribute': {
+      const cls = findClassByRef({ targetNumber: action.targetNumber, targetName: action.targetName });
+      if (cls) {
+        cls.attributes = cls.attributes.filter(a => a.name.toLowerCase() !== action.name.toLowerCase());
+      }
+      break;
+    }
+    case 'add_method': {
+      const cls = findClassByRef({ targetNumber: action.targetNumber, targetName: action.targetName });
+      if (cls) {
+        const exists = cls.methods.some(m => m.name.toLowerCase() === action.method.name.toLowerCase());
+        if (!exists) cls.methods = [...cls.methods, { name: action.method.name, returns: action.method.returns }];
+      }
+      break;
+    }
+    case 'update_method': {
+      const cls = findClassByRef({ targetNumber: action.targetNumber, targetName: action.targetName });
+      if (cls) {
+        cls.methods = cls.methods.map(m => {
+          if (m.name.toLowerCase() === action.fromName.toLowerCase()) {
+            return { name: action.toName ? action.toName : m.name, returns: action.returns ? action.returns : m.returns };
+          }
+          return m;
+        });
+      }
+      break;
+    }
+    case 'delete_method': {
+      const cls = findClassByRef({ targetNumber: action.targetNumber, targetName: action.targetName });
+      if (cls) {
+        cls.methods = cls.methods.filter(m => m.name.toLowerCase() !== action.name.toLowerCase());
+      }
+      break;
+    }
+    // Puedes añadir más casos: eliminar clase, actualizar atributos, etc.
+    default:
+      break;
+  }
+  return updated;
+}
+
+// Aplica una lista de acciones devolviendo cambios y errores
+export function applyActionsToDiagram(actions: ActionSuggestion[], diagram: DiagramModel): { diagram: DiagramModel; changes: string[]; errors: string[] } {
+  let d = { ...diagram, classes: [...diagram.classes], relations: [...diagram.relations] };
+  const changes: string[] = [];
+  const errors: string[] = [];
+  actions.forEach(a => {
+    const before = JSON.stringify(d);
+    const next = applyActionToDiagram(a, d);
+    const after = JSON.stringify(next);
+    if (before !== after) {
+      changes.push(describeAction(a));
+      d = next;
+    } else {
+      errors.push(`Sin cambios para acción: ${describeAction(a)}`);
+    }
+  });
+  return { diagram: d, changes, errors };
+}
+
+function describeAction(a: ActionSuggestion): string {
+  switch (a.type) {
+    case 'create_class': return `Crear clase ${a.name}`;
+    case 'delete_class': return `Eliminar clase ${a.targetName ?? a.targetNumber}`;
+    case 'rename_class': return `Renombrar clase ${a.targetName ?? a.targetNumber} a ${a.newName}`;
+    case 'move_class': return `Mover clase ${a.targetName ?? a.targetNumber} a (${a.x}, ${a.y})`;
+    case 'add_attribute': return `Agregar atributo ${a.attribute.name} a ${a.targetName ?? a.targetNumber}`;
+    case 'update_attribute': return `Actualizar atributo ${a.fromName} en ${a.targetName ?? a.targetNumber}`;
+    case 'delete_attribute': return `Eliminar atributo ${a.name} de ${a.targetName ?? a.targetNumber}`;
+    case 'add_method': return `Agregar método ${a.method.name} a ${a.targetName ?? a.targetNumber}`;
+    case 'update_method': return `Actualizar método ${a.fromName} en ${a.targetName ?? a.targetNumber}`;
+    case 'delete_method': return `Eliminar método ${a.name} de ${a.targetName ?? a.targetNumber}`;
+    case 'create_relation': return `Crear relación ${a.relationType ?? 'asociacion'} entre ${a.originName ?? a.originNumber} -> ${a.destName ?? a.destNumber}`;
+    case 'update_relation': return `Actualizar relación entre ${a.originName ?? a.originNumber} -> ${a.destName ?? a.destNumber}`;
+    case 'delete_relation': return `Eliminar relación entre ${a.originName ?? a.originNumber} -> ${a.destName ?? a.destNumber}`;
+    default: return 'Acción no-op';
+  }
+}
 // Minimal OpenAI client wrapper using fetch and Vite env
 // IMPORTANT: This calls OpenAI from the browser; only do this if you trust the environment.
 // For production, proxy via your backend to keep the API key server-side.
 
 export type ActionSuggestion =
+  // Clases
   | { type: 'create_class'; name: string; attributes?: Array<{ name: string; type: string }>; methods?: Array<{ name: string; returns: string }> }
-  | { type: 'create_relation'; originNumber: number; destNumber: number; relationType?: 'asociacion' | 'herencia' | 'agregacion' | 'composicion'; originCard?: string; destCard?: string; verb?: string }
-  | { type: 'delete_relation'; originNumber: number; destNumber: number }
+  | { type: 'delete_class'; targetNumber?: number; targetName?: string }
+  | { type: 'rename_class'; targetNumber?: number; targetName?: string; newName: string }
+  | { type: 'move_class'; targetNumber?: number; targetName?: string; x: number; y: number }
+  // Atributos
+  | { type: 'add_attribute'; targetNumber?: number; targetName?: string; attribute: { name: string; type: string } }
+  | { type: 'update_attribute'; targetNumber?: number; targetName?: string; fromName: string; toName?: string; dataType?: string }
+  | { type: 'delete_attribute'; targetNumber?: number; targetName?: string; name: string }
+  // Métodos
+  | { type: 'add_method'; targetNumber?: number; targetName?: string; method: { name: string; returns: string } }
+  | { type: 'update_method'; targetNumber?: number; targetName?: string; fromName: string; toName?: string; returns?: string }
+  | { type: 'delete_method'; targetNumber?: number; targetName?: string; name: string }
+  // Relaciones
+  | { type: 'create_relation'; originNumber?: number; destNumber?: number; originName?: string; destName?: string; relationType?: 'asociacion' | 'herencia' | 'agregacion' | 'composicion'; originCard?: string; destCard?: string; verb?: string }
+  | { type: 'update_relation'; originNumber?: number; destNumber?: number; originName?: string; destName?: string; relationType?: 'asociacion' | 'herencia' | 'agregacion' | 'composicion'; originCard?: string; destCard?: string; verb?: string }
+  | { type: 'delete_relation'; originNumber?: number; destNumber?: number; originName?: string; destName?: string }
+  // No-op
   | { type: 'noop' }
 
 export type AttributeSuggestion = {
@@ -107,7 +371,7 @@ function tryParseFirstJson<T = any>(text: string): T | undefined {
 
 // Very small prompt to extract intents. In production, move this logic server-side and improve schema validation.
 const SYSTEM_PROMPT = `Eres un asistente que transforma instrucciones en español sobre diagramas UML
-(clases y relaciones) a una sola acción JSON. Responde SOLO con JSON válido.
+(clases, atributos, métodos y relaciones) a una sola acción JSON. Responde SOLO con JSON válido.
 
 Robustez requerida:
 - Acepta errores ortográficos o de audio comunes (ASR). Interpreta "tabla", "entidad", "modelo" como clase.
@@ -124,9 +388,19 @@ Robustez requerida:
   - Si la relación es "asociacion" y NO se especifica cardinalidad, usa 1..1 por defecto en ambos extremos.
 
 Tipos de acción:
-- { "type": "create_class", "name": string, "attributes": [{"name", "type"}]?, "methods": [{"name", "returns"}]? }
-- { "type": "create_relation", "originNumber": number, "destNumber": number, "relationType": "asociacion"|"herencia"|"agregacion"|"composicion", "originCard"?: string, "destCard"?: string, "verb"?: string }
-- { "type": "delete_relation", "originNumber": number, "destNumber": number }
+- { "type": "create_class", "name": string, "attributes"?: [{"name": string, "type": "Int|Float|String|Bool|Date|DateTime"}], "methods"?: [{"name": string, "returns": string}] }
+- { "type": "delete_class", "targetNumber"?: number, "targetName"?: string }
+- { "type": "rename_class", "targetNumber"?: number, "targetName"?: string, "newName": string }
+- { "type": "move_class", "targetNumber"?: number, "targetName"?: string, "x": number, "y": number }
+- { "type": "add_attribute", "targetNumber"?: number, "targetName"?: string, "attribute": {"name": string, "type": "Int|Float|String|Bool|Date|DateTime"} }
+- { "type": "update_attribute", "targetNumber"?: number, "targetName"?: string, "fromName": string, "toName"?: string, "dataType"?: "Int|Float|String|Bool|Date|DateTime" }
+- { "type": "delete_attribute", "targetNumber"?: number, "targetName"?: string, "name": string }
+- { "type": "add_method", "targetNumber"?: number, "targetName"?: string, "method": {"name": string, "returns": string} }
+- { "type": "update_method", "targetNumber"?: number, "targetName"?: string, "fromName": string, "toName"?: string, "returns"?: string }
+- { "type": "delete_method", "targetNumber"?: number, "targetName"?: string, "name": string }
+- { "type": "create_relation", "originNumber"?: number, "destNumber"?: number, "originName"?: string, "destName"?: string, "relationType": "asociacion"|"herencia"|"agregacion"|"composicion", "originCard"?: string, "destCard"?: string, "verb"?: string }
+- { "type": "update_relation", "originNumber"?: number, "destNumber"?: number, "originName"?: string, "destName"?: string, "relationType"?: "asociacion"|"herencia"|"agregacion"|"composicion", "originCard"?: string, "destCard"?: string, "verb"?: string }
+- { "type": "delete_relation", "originNumber"?: number, "destNumber"?: number, "originName"?: string, "destName"?: string }
 Si no entiendes, usa {"type": "noop"}.
 
 Ejemplos:
