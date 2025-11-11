@@ -44,7 +44,7 @@ type FlutterConfig = {
 const DEFAULT_FLUTTER_CONFIG: FlutterConfig = {
   appName: 'UML Flutter App',
   appId: 'com.example.umlflutterapp',
-  apiBaseUrl: 'http://10.0.2.2:8000/api' // Cambiado para emulador Android
+  apiBaseUrl: 'http://10.0.2.2:8080/api' // Cambiado para emulador Android
 };
 // --- NUEVO: Forzar campo 'id' y normalizar nombres a minúsculas ---
 function normalizeAndForceId(diagram: DiagramModel): DiagramModel {
