@@ -112,10 +112,11 @@ export function manualGenerateBackend(): string {
 
 export function manualRecommendations(): string {
   return [
-    'Manual: Recomendaciones (sugerencias)',
-    '1) En la parte superior del proyecto verás recomendaciones relacionadas al diagrama.',
-    '2) Incluyen clases sugeridas y recomendaciones de atributos.',
-    '3) Revisa y aplica las sugerencias que te sirvan para mejorar el modelo.'
+    'Manual: Avisos UML',
+    '1) Dentro del editor, abre "Avisos UML" en la esquina superior derecha.',
+    '2) En el Sprint 1 se muestran datos de ejemplo, no detecciones reales ni resultados de IA.',
+    '3) Selecciona un aviso para consultar su detalle y resaltar los elementos disponibles.',
+    '4) El selector permite explorar estados de demostración; todavía no se aplican correcciones.'
   ].join('\n');
 }
 

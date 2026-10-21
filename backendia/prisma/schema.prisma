@@ -14,14 +14,17 @@ datasource db {
 }
 
 model Usuario {
-  id_usuario   Int      @id @default(autoincrement())
-  nombre       String?
-  correo       String   @unique
-  contrasena   String
+  id_usuario Int     @id @default(autoincrement())
+  nombre     String?
+  correo     String  @unique
+  contrasena String
 
-  Detalle_Proyecto          Detalle_Proyecto[]
-  InvitacionesEnviadas      Invitacion[] @relation("InvitacionRemitente")
-  InvitacionesRecibidas     Invitacion[] @relation("InvitacionDestinatario")
+  Detalle_Proyecto  Detalle_Proyecto[]
+  validationRuns    ValidationRun[]
+  validationActions ValidationAction[]
+
+  InvitacionesEnviadas  Invitacion[] @relation("InvitacionRemitente")
+  InvitacionesRecibidas Invitacion[] @relation("InvitacionDestinatario")
 }
 
 model Proyecto {
@@ -33,54 +36,144 @@ model Proyecto {
 
   Detalle_Proyecto Detalle_Proyecto[]
   Invitaciones     Invitacion[]
+  validationRuns   ValidationRun[]
 }
 
 model Permisos {
-  id_permiso   Int      @id @default(autoincrement())
-  descripcion  String
+  id_permiso  Int    @id @default(autoincrement())
+  descripcion String
 
   Detalle_Proyecto Detalle_Proyecto[]
   Invitaciones     Invitacion[]
 }
 
 model Detalle_Proyecto {
-  id_detalle    Int       @id @default(autoincrement())
-  id_usuario    Int
-  id_proyecto   Int
-  id_permiso    Int
+  id_detalle  Int @id @default(autoincrement())
+  id_usuario  Int
+  id_proyecto Int
+  id_permiso  Int
 
-  Usuario       Usuario   @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
-  Proyecto      Proyecto  @relation(fields: [id_proyecto], references: [id_proyecto], onDelete: Cascade)
-  Permisos      Permisos  @relation(fields: [id_permiso], references: [id_permiso], onDelete: Cascade)
+  Usuario           Usuario             @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+  Proyecto          Proyecto            @relation(fields: [id_proyecto], references: [id_proyecto], onDelete: Cascade)
+  Permisos          Permisos            @relation(fields: [id_permiso], references: [id_permiso], onDelete: Cascade)
   Acciones_Proyecto Acciones_Proyecto[]
 
   @@unique([id_usuario, id_proyecto, id_permiso])
 }
 
 model Acciones_Proyecto {
-  id_accion    Int       @id @default(autoincrement())
-  id_detalle   Int
-  accion       String
-  fecha_hora   DateTime  @default(now())
+  id_accion        Int               @id @default(autoincrement())
+  id_detalle       Int
+  accion           String
+  fecha_hora       DateTime          @default(now())
+  validationAction ValidationAction?
 
   Detalle_Proyecto Detalle_Proyecto @relation(fields: [id_detalle], references: [id_detalle], onDelete: Cascade)
 }
 
 model Invitacion {
-  id_invitacion    Int       @id @default(autoincrement())
-  id_proyecto      Int
-  id_remitente     Int       // Usuario que envía la invitación
-  id_destinatario  Int       // Usuario que recibe la invitación
-  id_permiso       Int       // Permiso que se otorgará al aceptar
-  estado          String     @default("pendiente") // pendiente, aceptada, rechazada
-  fecha_envio     DateTime   @default(now())
+  id_invitacion   Int       @id @default(autoincrement())
+  id_proyecto     Int
+  id_remitente    Int // Usuario que envía la invitación
+  id_destinatario Int // Usuario que recibe la invitación
+  id_permiso      Int // Permiso que se otorgará al aceptar
+  estado          String    @default("pendiente") // pendiente, aceptada, rechazada
+  fecha_envio     DateTime  @default(now())
   fecha_respuesta DateTime?
 
-  Proyecto        Proyecto  @relation(fields: [id_proyecto], references: [id_proyecto], onDelete: Cascade)
-  Remitente       Usuario   @relation("InvitacionRemitente", fields: [id_remitente], references: [id_usuario], onDelete: Cascade)
-  Destinatario    Usuario   @relation("InvitacionDestinatario", fields: [id_destinatario], references: [id_usuario], onDelete: Cascade)
-  Permiso         Permisos  @relation(fields: [id_permiso], references: [id_permiso], onDelete: Cascade)
+  Proyecto     Proyecto @relation(fields: [id_proyecto], references: [id_proyecto], onDelete: Cascade)
+  Remitente    Usuario  @relation("InvitacionRemitente", fields: [id_remitente], references: [id_usuario], onDelete: Cascade)
+  Destinatario Usuario  @relation("InvitacionDestinatario", fields: [id_destinatario], references: [id_usuario], onDelete: Cascade)
+  Permiso      Permisos @relation(fields: [id_permiso], references: [id_permiso], onDelete: Cascade)
 
   @@unique([id_proyecto, id_destinatario]) // Un usuario no puede tener múltiples invitaciones al mismo proyecto
   @@map("invitaciones")
+}
+
+// Validation stores results and decisions, never another copy of the UML diagram.
+enum ValidationRunStatus {
+  PENDING
+  COMPLETE
+  PARTIAL
+  FAILED
+}
+
+enum ValidationSeverity {
+  ERROR
+  WARNING
+  RECOMMENDATION
+}
+
+enum ValidationOrigin {
+  RULES
+  GRAPH
+  SEMANTIC
+}
+
+enum ValidationNoticeStatus {
+  ACTIVE
+  RESOLVED
+}
+
+enum ValidationActionType {
+  ACCEPTED
+  REJECTED
+  APPLIED
+  APPLICATION_FAILED
+}
+
+model ValidationRun {
+  id             String              @id @default(cuid())
+  projectId      Int
+  requestedById  Int?
+  snapshotHash   String
+  catalogVersion String
+  modelVersion   String?
+  status         ValidationRunStatus @default(PENDING)
+  createdAt      DateTime            @default(now())
+  completedAt    DateTime?
+  project        Proyecto            @relation(fields: [projectId], references: [id_proyecto], onDelete: Cascade)
+  requestedBy    Usuario?            @relation(fields: [requestedById], references: [id_usuario], onDelete: SetNull)
+  notices        ValidationNotice[]
+
+  // Include engine/catalog/model configuration in this key when orchestrating analyses.
+  @@unique([projectId, snapshotHash, catalogVersion])
+  @@index([projectId, createdAt])
+}
+
+model ValidationNotice {
+  id             String                 @id @default(cuid())
+  runId          String
+  fingerprint    String
+  ruleCode       String
+  severity       ValidationSeverity
+  origin         ValidationOrigin
+  status         ValidationNoticeStatus @default(ACTIVE)
+  title          String
+  explanation    String
+  recommendation String
+  affected       Json
+  createdAt      DateTime               @default(now())
+  resolvedAt     DateTime?
+  run            ValidationRun          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  actions        ValidationAction[]
+
+  @@unique([runId, fingerprint])
+  @@index([runId, severity])
+}
+
+model ValidationAction {
+  id             String               @id @default(cuid())
+  noticeId       String
+  actorId        Int?
+  auditActionId  Int?                 @unique
+  idempotencyKey String               @unique
+  type           ValidationActionType
+  snapshotHash   String
+  createdAt      DateTime             @default(now())
+  notice         ValidationNotice     @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  actor          Usuario?             @relation(fields: [actorId], references: [id_usuario], onDelete: SetNull)
+  auditAction    Acciones_Proyecto?   @relation(fields: [auditActionId], references: [id_accion], onDelete: SetNull)
+
+  @@index([noticeId, createdAt])
 }

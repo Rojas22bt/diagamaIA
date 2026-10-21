@@ -1,0 +1,41 @@
+{
+  "ui": [
+    {
+      "role": "creador",
+      "result": "PASS",
+      "states": 6,
+      "notices": 3,
+      "writes": 0,
+      "pageErrors": 0,
+      "generators": [
+        {
+          "generator": "Generar Proyecto Spring Boot",
+          "bytes": 31235
+        },
+        {
+          "generator": "Generar App Flutter",
+          "bytes": 21192
+        }
+      ]
+    },
+    {
+      "role": "editor",
+      "result": "PASS",
+      "states": 6,
+      "notices": 3,
+      "writes": 0,
+      "pageErrors": 0,
+      "generators": []
+    },
+    {
+      "role": "vista",
+      "result": "PASS",
+      "states": 6,
+      "notices": 3,
+      "writes": 0,
+      "pageErrors": 0,
+      "generators": []
+    }
+  ],
+  "note": "Real editor and JointJS; HTTP project data mocked. Socket server not exercised."
+}

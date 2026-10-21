@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "nextDisplayId": 3,
+  "classes": [
+    {"id":"c-1","displayId":1,"name":"Cliente","position":{"x":80,"y":100},"attributes":[{"name":"id","type":"Int"},{"name":"domicilio","type":"String"}],"methods":[]},
+    {"id":"c-2","displayId":2,"name":"Factura","position":{"x":400,"y":300},"attributes":[{"name":"id","type":"Int"}],"methods":[]}
+  ],
+  "relations": [{"id":"r-1","fromDisplayId":1,"toDisplayId":2,"type":"asociacion","originCard":"1","destCard":"*","verb":"recibe"}]
+}

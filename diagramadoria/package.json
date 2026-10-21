@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:validation": "node ../backendia/node_modules/tsx/dist/cli.mjs --test tests/validation-contracts.test.ts",
+    "test:validation:ui": "node tests/validation-ui.mjs",
+    "lint:validation": "eslint src/features/validation"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

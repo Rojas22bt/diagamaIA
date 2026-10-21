@@ -1,0 +1,21 @@
+{
+  "diagramadoria/src/features/validation/contracts.ts": "0b6398adc80a63c90ef44f12e1c6156c020a3421e73f0dde84d872f02e96aba4",
+  "diagramadoria/src/features/validation/types.ts": "46f0685f7a780289ea114ec6d328cac883f191c1d74b0ab3afb148b67b66fc6e",
+  "diagramadoria/src/features/validation/validation.css": "15768ecba1a3ef7ad2b2be190b4c942ed647b20f85b289f5c4f35c9e766ead65",
+  "diagramadoria/src/features/validation/components/NoticeDetail.tsx": "16880f3802246de95fabdbb65cee09036ecc6528c452a0596d490f89eff7f76a",
+  "diagramadoria/src/features/validation/components/NoticeList.tsx": "f967160052130da4b43ffe4568783d76e37d7b829bb8a170cccdc67a716e3f32",
+  "diagramadoria/src/features/validation/components/PanelStatus.tsx": "4e3b4a04d95f9bef393cac73ea3ef6d98f14a110aa5aa66f123c0d01e86852e8",
+  "diagramadoria/src/features/validation/components/ValidationWorkspace.tsx": "bf7eaf4877c57f054b627a896dddd48abdb3a13977c666a7a298903ea8f6025a",
+  "diagramadoria/src/features/validation/hooks/highlightViews.ts": "d7eab88034829038de3301405b73b049b624655612ce09ea6c147b9fcce685c8",
+  "diagramadoria/src/features/validation/hooks/useNoticeHighlight.ts": "42fa599b6b697e7357d0e83c5dfd21219e79fa51350be02eb87cd1342e8633a1",
+  "diagramadoria/src/features/validation/mocks/mockNoticeProvider.ts": "008c18c3d3a9739b4ec42b27a696881cf15aaec1b344ef995df21dafb1814e53",
+  "diagramadoria/src/pages/ConnectedDiagramPage.tsx": "18556537db03a73bc2b497fa0c791d24d09e4e1e23fe94cd80018d63b97dd7ad",
+  "diagramadoria/src/ai/openaiClient.ts": "a5f80c5be8fdaf4e5e941445d6e2868de98025db840b65364debde15bceaa136",
+  "diagramadoria/src/utils/assistantGuides.ts": "d4f4f2490a87ef86e8affbe8ddf445eb88a61aadc65428a8a73e5f35de3a8364",
+  "backendia/prisma/schema.prisma": "5537a52bbc8911b36213acba2159285caf4d4d858d9be2ce1854b52909b2f024",
+  "backendia/prisma/migrations/20261021000100_validation_audit/migration.sql": "f2dbf35c3e69a6ffa201d0a2932dc8b197c50edad2d1b0ffb3ff45dcd36e0688",
+  "backendia/tests/project-regression.test.mjs": "6ac6969683159a46b0e547d552c54ae375d00b6e00f2335aab8b4610e128b5e9",
+  "backendia/tests/validation-audit.test.ts": "357191937c5efbccffc45a401e829c8dcb22cd15e9526d61534f5f580f199eed",
+  "diagramadoria/tests/validation-contracts.test.ts": "25758fd1cb897d86c07b770747d6764ac71594ff8bbf2a1cdee8011fc7a99199",
+  "diagramadoria/tests/validation-ui.mjs": "599c3415338a31f7abcae23e70647f745c0110ab90321694881348fe8c28c0be"
+}

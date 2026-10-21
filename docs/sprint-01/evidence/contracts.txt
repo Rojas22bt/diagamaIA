@@ -1,0 +1,12 @@
+✔ mock provider returns all origins and severities without changing context (1.6802ms)
+✔ sort is deterministic, severity first, then rule code and id; does not mutate input (17.0866ms)
+✔ contract rejects malformed, duplicate, invalid-date and unsupported notices (1.3477ms)
+✔ empty diagram still yields explicitly fictitious, unresolvable references (0.4313ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 419.9949

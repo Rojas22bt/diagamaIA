@@ -1,0 +1,233 @@
+.validation-toggle {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 6;
+  border: 1px solid #3155a6;
+  border-radius: 10px;
+  background: #172d55;
+  color: white;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.validation-toggle:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.validation-panel {
+  position: absolute;
+  top: 58px;
+  bottom: 65px;
+  right: 12px;
+  z-index: 1100;
+  width: min(410px,calc(100% - 24px));
+  overflow-y: auto;
+  background: #f8fafc;
+  color: #172d45;
+  border: 1px solid #c8d5e6;
+  border-radius: 16px;
+  box-shadow: 0 15px 50px #172d4530;
+  font-family: system-ui,sans-serif;
+  text-align: left;
+}
+
+.validation-panel * {
+  box-sizing: border-box;
+}
+
+.validation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 18px 12px;
+}
+
+.validation-header h2 {
+  margin: 5px 0 0;
+  font-size: 21px;
+  color: #142e50;
+}
+
+.validation-eyebrow {
+  font-size: 10px;
+  letter-spacing: .12em;
+  font-weight: 750;
+  color: #527195;
+}
+
+.validation-header button {
+  border: 1px solid #c8d5e6;
+  border-radius: 8px;
+  padding: 8px 11px;
+  background: white;
+  color: #27425f;
+  cursor: pointer;
+}
+
+.validation-demo-banner {
+  margin: 0 16px 14px;
+  padding: 12px;
+  border: 1px solid #d6a94e;
+  background: #fff8e6;
+  color: #765013;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.validation-scenario {
+  display: block;
+  padding: 0 16px;
+  font-weight: 650;
+  font-size: 12px;
+}
+
+.validation-scenario select {
+  width: 100%;
+  margin: 7px 0;
+  padding: 10px;
+  border: 1px solid #b7c8dc;
+  border-radius: 7px;
+  background: white;
+  color: #172d45;
+}
+
+.validation-status {
+  margin: 8px 16px 16px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #50647d;
+}
+
+.validation-status-failed,.validation-status-forbidden {
+  color: #a72a38;
+}
+
+.validation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px;
+  display: grid;
+  gap: 9px;
+}
+
+.validation-notice {
+  width: 100%;
+  display: grid;
+  gap: 7px;
+  text-align: left;
+  padding: 13px;
+  background: white;
+  border: 1px solid #d6dfec;
+  border-radius: 10px;
+  color: #172d45;
+  cursor: pointer;
+}
+
+.validation-notice[aria-pressed=true] {
+  outline: 2px solid #3767ae;
+  border-color: transparent;
+  background: #f1f6ff;
+}
+
+.validation-notice-title {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.validation-badge {
+  justify-self: start;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.validation-badge-error {
+  color: #a12635;
+  background: #fce7eb;
+}
+
+.validation-badge-warning {
+  color: #805311;
+  background: #fff1cf;
+}
+
+.validation-badge-recommendation {
+  color: #345c9d;
+  background: #e7efff;
+}
+
+.validation-meta {
+  color: #5c718a;
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+
+.validation-detail {
+  padding: 16px;
+  margin-top: 16px;
+  border-top: 1px solid #d6dfec;
+  font-size: 13px;
+  line-height: 1.65;
+  background: white;
+}
+
+.validation-detail h3 {
+  font-size: 16px;
+  margin: 0 0 7px;
+}
+
+.validation-detail h4 {
+  font-size: 12px;
+  margin: 16px 0 5px;
+}
+
+.validation-detail p {
+  margin: 5px 0;
+}
+
+.validation-detail ul {
+  padding-left: 20px;
+}
+
+.validation-missing {
+  padding: 9px;
+  border-radius: 6px;
+  background: #fff5e3;
+  color: #805311;
+}
+
+.validation-hint,.validation-footer {
+  padding: 15px 18px;
+  font-size: 11px;
+  color: #60758e;
+  line-height: 1.6;
+}
+
+.validation-footer {
+  border-top: 1px solid #d6dfec;
+  margin-top: 16px;
+}
+
+.validation-panel button:focus-visible,.validation-toggle:focus-visible,.validation-panel select:focus-visible {
+  outline: 3px solid #4388f0;
+  outline-offset: 3px;
+}
+
+.validation-highlight-error {
+  filter: drop-shadow(0 0 5px #e13e52) drop-shadow(0 0 2px #e13e52);
+}
+
+.validation-highlight-warning {
+  filter: drop-shadow(0 0 5px #d78a11) drop-shadow(0 0 2px #d78a11);
+}
+
+.validation-highlight-recommendation {
+  filter: drop-shadow(0 0 5px #3970d9) drop-shadow(0 0 2px #3970d9);
+}

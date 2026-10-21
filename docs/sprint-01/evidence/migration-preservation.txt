@@ -1,0 +1,12 @@
+   titulo    |                                            diagrama_json                                             
+-------------+------------------------------------------------------------------------------------------------------
+ preexisting | {"classes": [{"id": "c-legacy", "name": "Original", "displayId": 1}], "version": 1, "relations": []}
+(1 row)
+
+    tablename     
+------------------
+ ValidationAction
+ ValidationNotice
+ ValidationRun
+(3 rows)
+

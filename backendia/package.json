@@ -12,7 +12,7 @@
     "start": "node dist/server.js",
     "postinstall": "prisma generate",
     "prisma:migrate:deploy": "prisma migrate deploy",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "tsx --test tests/*.test.ts tests/*.test.mjs"
   },
   "keywords": [],
   "author": "",

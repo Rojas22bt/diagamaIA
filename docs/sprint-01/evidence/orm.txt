@@ -1,0 +1,9 @@
+✔ Prisma validation audit: CRUD, constraints, atomicity, actor retention and project cascade (180.2421ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 586.4429
