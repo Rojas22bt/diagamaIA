@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "nextDisplayId": 6,
+  "classes": [
+    {
+      "id": "c-1",
+      "displayId": 1,
+      "name": "PagoTarjeta",
+      "position": {
+        "x": 80,
+        "y": 300
+      },
+      "attributes": [
+        {
+          "name": "id",
+          "type": "Int"
+        }
+      ],
+      "methods": []
+    },
+    {
+      "id": "c-2",
+      "displayId": 2,
+      "name": "Pago",
+      "position": {
+        "x": 380,
+        "y": 170
+      },
+      "attributes": [
+        {
+          "name": "id",
+          "type": "Int"
+        }
+      ],
+      "methods": []
+    },
+    {
+      "id": "c-3",
+      "displayId": 3,
+      "name": "PagoEfectivo",
+      "position": {
+        "x": 680,
+        "y": 300
+      },
+      "attributes": [
+        {
+          "name": "id",
+          "type": "Int"
+        }
+      ],
+      "methods": []
+    },
+    {
+      "id": "c-4",
+      "displayId": 4,
+      "name": "Transaccion",
+      "position": {
+        "x": 380,
+        "y": 50
+      },
+      "attributes": [
+        {
+          "name": "id",
+          "type": "Int"
+        }
+      ],
+      "methods": []
+    },
+    {
+      "id": "c-5",
+      "displayId": 5,
+      "name": "PagoTransferencia",
+      "position": {
+        "x": 380,
+        "y": 440
+      },
+      "attributes": [
+        {
+          "name": "id",
+          "type": "Int"
+        }
+      ],
+      "methods": []
+    }
+  ],
+  "relations": [
+    {
+      "id": "r-1",
+      "fromDisplayId": 1,
+      "toDisplayId": 2,
+      "type": "herencia"
+    },
+    {
+      "id": "r-2",
+      "fromDisplayId": 3,
+      "toDisplayId": 2,
+      "type": "herencia"
+    },
+    {
+      "id": "r-3",
+      "fromDisplayId": 2,
+      "toDisplayId": 4,
+      "type": "herencia"
+    },
+    {
+      "id": "r-4",
+      "fromDisplayId": 5,
+      "toDisplayId": 2,
+      "type": "herencia"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { umlRelationLine } from '../utils/umlRelationLine';
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import * as joint from 'jointjs'
@@ -277,8 +278,8 @@ const ConnectedDiagramPage: React.FC = () => {
             return;
         }
 
-        // Only save if we have actual content and we're not in an initial load state
-        if ((classes.length > 0 || relations.length > 0) && graph && paper) {
+        // Persist deletions down to an empty diagram, while respecting read-only access.
+        if (graph && paper && (roleRef.current === 'creador' || roleRef.current === 'editor')) {
             console.log('State changed, scheduling autosave... Classes:', classes.length, 'Relations:', relations.length);
             scheduleAutoSave();
         } else {
@@ -323,6 +324,7 @@ const ConnectedDiagramPage: React.FC = () => {
 
     const scheduleAutoSave = () => {
         try {
+            if (roleRef.current !== 'creador' && roleRef.current !== 'editor') return;
             // Only send updates if not applying remote changes
             if (applyingRemoteRef.current) return;
 
@@ -1650,16 +1652,10 @@ const ConnectedDiagramPage: React.FC = () => {
             }
             console.log('Creating relation from', rel.fromDisplayId, 'to', rel.toDisplayId);
 
-            const link = new joint.shapes.standard.Link();
+            const link = new joint.shapes.standard.Link({ id: rel.id });
             link.source(origenEl);
             link.target(destinoEl);
-            let lineAttrs: any = { stroke: '#0b132b', strokeWidth: 2 };
-            if (rel.type === 'herencia') {
-                lineAttrs.targetMarker = { type: 'path', d: 'M 15 0 L 0 -10 L 0 10 Z', fill: '#ffffff', stroke: '#0b132b', strokeWidth: 2 };
-            } else if (rel.type === 'agregacion' || rel.type === 'composicion') {
-                lineAttrs.targetMarker = { type: 'path', d: 'M 0 0 L 10 -7 L 20 0 L 10 7 Z', fill: '#ffffff', stroke: '#0b132b', strokeWidth: 2 };
-            }
-            link.attr({ line: lineAttrs });
+            link.attr({ line: umlRelationLine(rel.type) });
             if (rel.type === 'asociacion') {
                 const labels: any[] = [];
                 if (rel.originCard) labels.push({ position: 0.15, attrs: { text: { text: rel.originCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
@@ -1802,16 +1798,10 @@ const ConnectedDiagramPage: React.FC = () => {
         const origenEl = classesRef.current.find(c => c.displayId === rel.fromDisplayId)?.element;
         const destinoEl = classesRef.current.find(c => c.displayId === rel.toDisplayId)?.element;
         if (!origenEl || !destinoEl) return false;
-        const link = new joint.shapes.standard.Link();
+        const link = new joint.shapes.standard.Link({ id: rel.id });
         link.source(origenEl);
         link.target(destinoEl);
-        let lineAttrs: any = { stroke: '#0b132b', strokeWidth: 2 };
-        if (rel.type === 'herencia') {
-            lineAttrs.targetMarker = { type: 'path', d: 'M 15 0 L 0 -10 L 0 10 Z', fill: '#ffffff', stroke: '#0b132b', strokeWidth: 2 };
-        } else if (rel.type === 'agregacion' || rel.type === 'composicion') {
-            lineAttrs.targetMarker = { type: 'path', d: 'M 0 0 L 10 -7 L 20 0 L 10 7 Z', fill: '#ffffff', stroke: '#0b132b', strokeWidth: 2 };
-        }
-        link.attr({ line: lineAttrs });
+        link.attr({ line: umlRelationLine(rel.type) });
         if (rel.type === 'asociacion') {
             const labels: any[] = [];
             if (rel.originCard) labels.push({ position: 0.15, attrs: { text: { text: rel.originCard, fill: '#0b132b', fontSize: 12, fontWeight: 'bold' }, rect: { fill: '#ffffff', stroke: '#d0d7de', strokeWidth: 1, rx: 4, ry: 4, opacity: 0.9 } } });
@@ -2282,43 +2272,7 @@ const ConnectedDiagramPage: React.FC = () => {
         link.source(origen.element);
         link.target(destino.element);
 
-        // Estilo según tipo de relación (más cercano a UML)
-        let lineAttrs: any = {
-            stroke: '#0b132b',
-            strokeWidth: 2
-        };
-        if (relationType === 'asociacion') {
-            // Asociación: línea simple (sin flecha), cardinalidad visible
-            // Sin targetMarker para asemejarse a Association UML
-        } else if (relationType === 'herencia') {
-            // Generalización: triángulo hueco
-            lineAttrs.targetMarker = {
-                type: 'path',
-                d: 'M 15 0 L 0 -10 L 0 10 Z',
-                fill: '#ffffff',
-                stroke: '#0b132b',
-                strokeWidth: 2
-            };
-        } else if (relationType === 'agregacion') {
-            // Agregación: rombo hueco
-            lineAttrs.targetMarker = {
-                type: 'path',
-                d: 'M 0 0 L 10 -7 L 20 0 L 10 7 Z',
-                fill: '#ffffff',
-                stroke: '#0b132b',
-                strokeWidth: 2
-            };
-        } else if (relationType === 'composicion') {
-            // Composición: rombo sólido
-            lineAttrs.targetMarker = {
-                type: 'path',
-                d: 'M 0 0 L 10 -7 L 20 0 L 10 7 Z',
-                fill: '#ffffff',
-                stroke: '#0b132b',
-                strokeWidth: 2
-            };
-        }
-        link.attr({ line: lineAttrs });
+        link.attr({ line: umlRelationLine(relationType) });
         // Etiquetas: SOLO para Asociación (cardinalidades y verbo)
         if (relationType === 'asociacion') {
             const originLabelText = originCard;
@@ -2464,7 +2418,7 @@ const ConnectedDiagramPage: React.FC = () => {
         // Registrar relación en el estado estructurado
         setRelations(prev => {
             const newRel: UMLRelation = {
-                id: `r-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                id: String(link.id),
                 fromDisplayId: origen.displayId,
                 toDisplayId: destino.displayId,
                 type: relationType as UMLRelationType,
@@ -2483,7 +2437,7 @@ const ConnectedDiagramPage: React.FC = () => {
             addActivity(String(pidNumRel), { type: 'create_relation', message: `${selfName} creó relación ${relationType} entre #${originNum} y #${destNum}${relationType === 'asociacion' && relationVerb ? ` (${relationVerb})` : ''}`, byUserId: selfId, byName: selfName });
             setActivities(getActivities(String(pidNumRel)));
             try {
-                const relationPayload: UMLRelation = { id: `r-${Date.now()}`, fromDisplayId: origen.displayId, toDisplayId: destino.displayId, type: relationType as UMLRelationType, originCard: relationType === 'asociacion' ? originCard : undefined, destCard: relationType === 'asociacion' ? destCard : undefined, verb: relationType === 'asociacion' ? (relationVerb || undefined) : undefined };
+                const relationPayload: UMLRelation = { id: String(link.id), fromDisplayId: origen.displayId, toDisplayId: destino.displayId, type: relationType as UMLRelationType, originCard: relationType === 'asociacion' ? originCard : undefined, destCard: relationType === 'asociacion' ? destCard : undefined, verb: relationType === 'asociacion' ? (relationVerb || undefined) : undefined };
                 const payload: DiagramUpdate = { projectId: pidNumRel, userId: Number(localStorage.getItem('userId') || 0), diagramData: { relation: relationPayload }, changeType: 'create_relation', elementId: undefined, timestamp: new Date().toISOString() };
                 try { if (socketService.isConnected() && !socketService.isInProject(pidNumRel)) socketService.joinProject(pidNumRel); } catch { }
                 socketService.sendDiagramUpdate(payload);
@@ -2794,7 +2748,7 @@ const ConnectedDiagramPage: React.FC = () => {
                             </div>
                         )}
                         <div className="field">
-                            <label>Número origen</label>
+                            <label>{relationType === 'herencia' ? 'Clase hija (número)' : relationType === 'asociacion' ? 'Número origen' : 'Clase parte (número)'}</label>
                             <input
                                 type="number"
                                 value={originNum}
@@ -2803,7 +2757,7 @@ const ConnectedDiagramPage: React.FC = () => {
                             />
                         </div>
                         <div className="field">
-                            <label>Número destino</label>
+                            <label>{relationType === 'herencia' ? 'Clase padre (número)' : relationType === 'asociacion' ? 'Número destino' : 'Clase todo (número)'}</label>
                             <input
                                 type="number"
                                 value={destNum}
@@ -2883,7 +2837,7 @@ const ConnectedDiagramPage: React.FC = () => {
             <div className="canvas">
                 {/* JointJS host - dedicated container to avoid React/JointJS DOM conflicts */}
                 <div className="paper-host" ref={diagramaRef} style={{ width: '100%', height: '100%' }} />
-                <ValidationWorkspace key={projectId} projectId={projectId ?? ''} role={myRole} classes={classes} graph={graph} paper={paper} />
+                <ValidationWorkspace key={projectId} projectId={projectId ?? ''} role={myRole} classes={classes} relations={relations} graph={graph} paper={paper} />
 
                 {/* Acceso rápido al Chat Bot (side panel) */}
                 <button

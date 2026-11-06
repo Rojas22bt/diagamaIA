@@ -1,3 +1,4 @@
+import './env.js';
 import { createServer } from 'http';
 import app from "./app.js";
 import { initializeSocketIO } from './services/socket.service.js';

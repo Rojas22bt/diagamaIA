@@ -1,5 +1,7 @@
 # Módulo de validación de diagramas de clases UML en tiempo real
 
+Actualización del Sprint 2 (02/11/2026): por decisión del responsable se utiliza OpenAI desde el backend. El modelo se configura con `OPENAI_MODEL` y su valor predeterminado es `gpt-4.1-mini`. La implementación y sus comprobaciones están descritas en [la entrega del Sprint 2](docs/sprint-02/informe-entrega.md).
+
 ## 1. Nombre del módulo
 
 **Agente Inteligente para la Validación de Diagramas de Clases en Tiempo Real**, módulo de la plataforma Diagramador Inteligente.
@@ -7,7 +9,7 @@
 El módulo revisa los diagramas de clases que los usuarios ya elaboran en la plataforma y les entrega avisos, explicaciones y recomendaciones mientras trabajan. Es un sistema híbrido:
 
 - **Reglas programadas y algoritmos de grafos (BFS y DFS)** revisan la estructura del diagrama. No son inteligencia artificial.
-- **Un modelo de deep learning preentrenado (Claude Haiku 5.5)** interpreta el significado de los nombres y redacta las recomendaciones de los casos semánticos. No se entrena ni se ajusta ningún modelo.
+- **Un modelo de deep learning preentrenado (GPT-4.1 mini de OpenAI)** interpreta el significado de los nombres y redacta las recomendaciones de los casos semánticos. No se entrena ni se ajusta ningún modelo.
 
 ---
 
@@ -15,7 +17,7 @@ El módulo revisa los diagramas de clases que los usuarios ya elaboran en la pla
 
 ### 2.1 Objetivo general
 
-Implementar y desarrollar el Agente Inteligente para la Validación de Diagramas de Clases en Tiempo Real como módulo de la plataforma Diagramador Inteligente, combinando reglas de validación programadas con el modelo de deep learning Claude Haiku 5.5, para detectar inconsistencias estructurales, subgrupos desconectados y posibles duplicaciones de significado en diagramas de clases UML, y ofrecer explicaciones y recomendaciones que faciliten su revisión por parte del equipo, aplicando la metodología Scrum.
+Implementar y desarrollar el Agente Inteligente para la Validación de Diagramas de Clases en Tiempo Real como módulo de la plataforma Diagramador Inteligente, combinando reglas de validación programadas con el modelo de deep learning GPT-4.1 mini de OpenAI, para detectar inconsistencias estructurales, subgrupos desconectados y posibles duplicaciones de significado en diagramas de clases UML, y ofrecer explicaciones y recomendaciones que faciliten su revisión por parte del equipo, aplicando la metodología Scrum.
 
 ### 2.2 Objetivos específicos
 
@@ -45,7 +47,7 @@ El módulo se organiza en cinco submódulos. En este proyecto, la **navegabilida
 | **2. Análisis de grafo** (BFS y DFS) | G01 | Detectar ciclos de herencia y composición | DFS. Muestra la ruta del ciclo. Los ciclos de asociación no son error. | 2 |
 | | G02 | Detectar clases aisladas | BFS sin dirección. Es una **advertencia**. Excepción para diagramas vacíos o de una sola clase. | 2 |
 | | G03 | Detectar subgrupos desconectados | BFS sin dirección. Es una **advertencia**: la separación puede ser intencional. | 2 |
-| **3. Análisis semántico** (Claude Haiku 5.5) | S01 | Seleccionar casos a consultar | Envía al modelo solo los casos dudosos, con las clases involucradas. | 2 |
+| **3. Análisis semántico** (GPT-4.1 mini de OpenAI) | S01 | Seleccionar casos a consultar | Envía al modelo solo los casos dudosos, con las clases involucradas. | 2 |
 | | S02 | Detectar atributos posiblemente equivalentes | Sugiere equivalencias como `domicilio` y `direccion_envio`. Es una sugerencia: pueden tener funciones distintas. | 2 |
 | | S03 | Evaluar relaciones ambiguas | Juzga si el tipo de relación tiene sentido según el significado de las clases. | 2 |
 | | S04 | Explicar y recomendar | Redacta explicación y recomendación de los casos semánticos, indicando su nivel de certeza. | 2 |
@@ -99,7 +101,7 @@ Los puntos (PHU) son una **estimación inicial** y se confirman con el equipo en
 | HU-08 | Detectar problemas estructurales | Alta | 5 | Yo, como modelador, quiero que el sistema revise multiplicidades, tipos de relación, referencias huérfanas y duplicados exactos **para** corregir inconsistencias objetivas sin revisar a mano. | Una función por regla, fácil de probar. Normalizar nombres (minúsculas, sin acentos). Explicar con plantillas, sin el modelo. | Una N:M sin clase intermedia genera una recomendación, no un error. |
 | HU-09 | Detectar ciclos de herencia y composición | Alta | 3 | Yo, como modelador, quiero que el sistema encuentre ciclos de herencia o composición **para** corregir dependencias imposibles. | DFS con estados "nueva, en camino, terminada". Mostrar la ruta. | Vehículo hereda de Máquina, Máquina de Equipo y Equipo de Vehículo: se muestra la ruta completa. |
 | HU-10 | Detectar clases aisladas y subgrupos desconectados | Alta | 3 | Yo, como modelador, quiero ver qué clases o grupos no están conectados con el resto **para** decidir si es intencional. | BFS sin dirección sobre un grafo armado en memoria. Severidad de advertencia. Excepción para diagramas pequeños. | Proveedor y Categoría forman un grupo separado: "No tienen conexión con el resto del diagrama". |
-| HU-11 | Revisar ambigüedades semánticas | Alta | 8 | Yo, como modelador, quiero sugerencias sobre atributos posiblemente equivalentes y relaciones dudosas **para** revisar el significado de mi modelo. | Claude Haiku 5.5 por API, consultado desde el servidor. Mensaje de sistema fijo y 3 a 5 ejemplos. Respuesta en JSON validada, con nivel de certeza. Registrar modelo y versión. | `domicilio` y `direccion_envio` se sugieren como posible duplicado, aclarando que pueden tener funciones distintas. |
+| HU-11 | Revisar ambigüedades semánticas | Alta | 8 | Yo, como modelador, quiero sugerencias sobre atributos posiblemente equivalentes y relaciones dudosas **para** revisar el significado de mi modelo. | GPT-4.1 mini de OpenAI por API, consultado desde el servidor. Mensaje de sistema fijo y 3 a 5 ejemplos. Respuesta en JSON validada, con nivel de certeza. Registrar modelo y versión. | `domicilio` y `direccion_envio` se sugieren como posible duplicado, aclarando que pueden tener funciones distintas. |
 | HU-12 | Analizar cambios y controlar las consultas al modelo | Alta | 5 | Yo, como colaborador, quiero que el análisis se actualice sin consultas innecesarias **para** mantener fluida la edición. | Pausa configurable (~0.5 s). Caché de resultados. Tiempo de espera y reintentos. Si falla la IA se conservan los resultados de las reglas. Credencial solo en el servidor. | Si el modelo tarda y el usuario vuelve a editar, la respuesta vieja se descarta. |
 | HU-13 | Compartir avisos en tiempo real | Alta | 5 | Yo, como colaborador, quiero ver los mismos avisos que mis compañeros **para** coordinar la revisión. | Socket.IO por proyecto. Recuperar el estado al reconectar. Aislar proyectos entre sí. | María entra a la sesión y ve los mismos avisos que Juan. |
 
@@ -121,7 +123,7 @@ Los puntos (PHU) son una **estimación inicial** y se confirman con el equipo en
 
 ## 5. Conclusión
 
-Se realizará un módulo integrado de validación de diagramas de clases. Su núcleo es la comprobación estructural con reglas programadas y la comprobación de conectividad con algoritmos de grafos (BFS y DFS), ambas rápidas y sin inteligencia artificial. Sobre ese núcleo, el modelo de deep learning Claude Haiku 5.5 evalúa solo los casos que dependen del significado y redacta explicaciones y recomendaciones. Su aporte se medirá en el Sprint 3, sin suponer de antemano que todas sus sugerencias mejoran el resultado.
+Se realizará un módulo integrado de validación de diagramas de clases. Su núcleo es la comprobación estructural con reglas programadas y la comprobación de conectividad con algoritmos de grafos (BFS y DFS), ambas rápidas y sin inteligencia artificial. Sobre ese núcleo, el modelo de deep learning GPT-4.1 mini de OpenAI evalúa solo los casos que dependen del significado y redacta explicaciones y recomendaciones. Su aporte se medirá en el Sprint 3, sin suponer de antemano que todas sus sugerencias mejoran el resultado.
 
 El resultado esperado es que los usuarios sepan qué condición requiere revisión, dónde está, por qué se señala y qué alternativa se propone, con avisos compartidos en tiempo real y decisiones registradas. El agente es asistencial: avisa, explica y recomienda, y la decisión de modificar el diagrama es siempre del usuario.
 

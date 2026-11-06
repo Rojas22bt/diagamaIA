@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { validation } from '../validation/service.js';
 
 const prisma = new PrismaClient();
 
@@ -249,11 +250,17 @@ export const updateProjectDiagram = async (req: Request, res: Response) => {
             return res.status(403).json({ error: 'No tienes acceso a este proyecto' });
         }
 
+        if (!['creador', 'editor'].includes(acceso.Permisos.descripcion)) {
+            return res.status(403).json({ error: 'No tienes permiso para editar este proyecto' });
+        }
+
         // Actualizar el diagrama
         const proyecto = await prisma.proyecto.update({
             where: { id_proyecto: parseInt(id) },
             data: { diagrama_json }
         });
+
+        validation.schedule(parseInt(id), userId, diagrama_json);
 
         // Registrar acción
         await prisma.acciones_Proyecto.create({

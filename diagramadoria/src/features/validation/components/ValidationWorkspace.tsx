@@ -1,123 +1,79 @@
 import { useEffect, useMemo, useState } from 'react';
 import type * as joint from 'jointjs';
-import type { PanelScenario, ValidationNotice } from '../types';
+import type { PanelScenario } from '../types';
+import type { LiveClass, LiveRelation } from '../live';
+import { currentDiagramKey } from '../live';
 import { sortNotices } from '../contracts';
-import { createMockNotices } from '../mocks/mockNoticeProvider';
+import { useLiveValidation } from '../hooks/useLiveValidation';
 import { useNoticeHighlight } from '../hooks/useNoticeHighlight';
 import { NoticeDetail } from './NoticeDetail';
 import { NoticeList } from './NoticeList';
 import { PanelStatus } from './PanelStatus';
 import '../validation.css';
 
-interface ClassBinding {
-  displayId: number;
-  name: string;
-  element?: joint.dia.Element;
-}
+interface ClassBinding extends LiveClass { element?: joint.dia.Element }
 interface ValidationWorkspaceProps {
   projectId: string;
   role: string;
   classes: readonly ClassBinding[];
+  relations: readonly LiveRelation[];
   graph: joint.dia.Graph | null;
   paper: joint.dia.Paper | null;
 }
-interface DemoSession {
-  notices: ValidationNotice[];
-  bindings: Map<string, joint.dia.Cell>;
-}
 
-export function ValidationWorkspace({ projectId, role, classes, graph, paper }: ValidationWorkspaceProps) {
-  const [session, setSession] = useState<DemoSession | null>(null);
-  const [scenario, setScenario] = useState<PanelScenario>('ready');
+export function ValidationWorkspace({ projectId, role, classes, relations, graph, paper }: ValidationWorkspaceProps) {
+  const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const authorized = ['creador', 'editor', 'vista'].includes(role);
-  const effectiveScenario = authorized ? scenario : 'forbidden';
-  const notices = useMemo(() => {
-    if (!session || !['ready', 'partial'].includes(effectiveScenario)) return [];
-    return sortNotices(session.notices.filter(notice => effectiveScenario !== 'partial' || notice.origin !== 'semantic'));
-  }, [session, effectiveScenario]);
+  const key = useMemo(() => currentDiagramKey(classes, relations), [classes, relations]);
+  const { result, error } = useLiveValidation(projectId, open && authorized, key);
+  const scenario: PanelScenario = !authorized ? 'forbidden' : error?.status ?? result?.status ?? 'loading';
+  const notices = useMemo(() => authorized && !error && result ? sortNotices(result.notices) : [], [authorized, error, result]);
   const selected = notices.find(notice => notice.id === selectedId);
-  const missingReferences = useNoticeHighlight({
-    notice: selected,
-    bindings: session?.bindings,
-    graph,
-    paper,
-  });
-
-  const openPanel = () => {
-    if (!authorized || !graph || !paper) return;
-    const bindings = new Map<string, joint.dia.Cell>();
-    classes.forEach(item => { if (item.element) bindings.set(`class:${item.displayId}`, item.element); });
+  const bindings = useMemo(() => {
+    const map = new Map<string, joint.dia.Cell>();
+    if (!result || !graph) return map;
+    classes.forEach(item => { if (item.element) map.set(`class:${item.displayId}`, item.element); });
     const links = graph.getLinks();
-    links.forEach(link => bindings.set(`relation:${String(link.id)}`, link));
-    setSession({
-      bindings,
-      notices: createMockNotices(projectId, { classes, relations: links.map(link => ({ id: String(link.id) })) }),
-    });
-    setScenario('ready');
-    setSelectedId(null);
-  };
-  const closePanel = () => { setSession(null); setSelectedId(null); };
-
+    for (const relation of relations) {
+      const exact = graph.getCell(relation.id);
+      if (exact?.isLink()) { map.set(`relation:${relation.id}`, exact); continue; }
+      const from = classes.find(item => item.displayId === relation.fromDisplayId)?.element;
+      const to = classes.find(item => item.displayId === relation.toDisplayId)?.element;
+      // Bind legacy generated link IDs only when the endpoint pair is unambiguous.
+      const matches = links.filter(link => link.source().id === from?.id && link.target().id === to?.id);
+      if (from && to && matches.length === 1 && relations.filter(item => item.fromDisplayId === relation.fromDisplayId && item.toDisplayId === relation.toDisplayId).length === 1) map.set(`relation:${relation.id}`, matches[0]);
+    }
+    return map;
+  }, [result, graph, classes, relations]);
+  const missingReferences = useNoticeHighlight({ notice: selected, bindings, graph, paper });
+  const closePanel = () => { setOpen(false); setSelectedId(null); };
   useEffect(() => {
-    if (!session) return;
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') { setSession(null); setSelectedId(null); } };
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') { setOpen(false); setSelectedId(null); } };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [session]);
+  }, [open]);
 
   return (
     <>
-      <button
-        type="button"
-        className="validation-toggle"
-        disabled={!authorized || !paper}
-        aria-expanded={session !== null}
-        aria-controls="validation-panel"
-        onClick={session ? closePanel : openPanel}
-      >
+      <button type="button" className="validation-toggle" disabled={!authorized || !paper}
+        aria-expanded={open} aria-controls="validation-panel" onClick={open ? closePanel : () => setOpen(true)}>
         ◎ Avisos UML
       </button>
-      {session && (
+      {open && (
         <aside id="validation-panel" className="validation-panel" aria-labelledby="validation-title">
           <header className="validation-header">
-            <div>
-              <span className="validation-eyebrow">AGENTE DE VALIDACIÓN · SPRINT 1</span>
-              <h2 id="validation-title">Avisos del diagrama</h2>
-            </div>
+            <div><span className="validation-eyebrow">AGENTE DE VALIDACIÓN · SPRINT 2</span><h2 id="validation-title">Avisos del diagrama</h2></div>
             <button type="button" aria-label="Cerrar panel de avisos" onClick={closePanel}>✕</button>
           </header>
-          <p className="validation-demo-banner">
-            Datos de ejemplo · No se está analizando el diagrama. No se consulta IA ni se guardan estos avisos.
-          </p>
-          <label className="validation-scenario">
-            Escenario de demostración
-            <select
-              value={scenario}
-              onChange={event => {
-                setScenario(event.target.value as PanelScenario);
-                setSelectedId(null);
-              }}
-            >
-              <option value="ready">Avisos de ejemplo</option>
-              <option value="loading">Analizando</option>
-              <option value="empty">Sin avisos</option>
-              <option value="partial">Análisis parcial</option>
-              <option value="failed">Fallo</option>
-              <option value="forbidden">Sin permisos</option>
-            </select>
-          </label>
-          <PanelStatus scenario={effectiveScenario} />
+          <p className="validation-demo-banner">Revisión del diagrama guardado · Los avisos se actualizan al guardar los cambios.</p>
+          <PanelStatus scenario={scenario === 'ready' && notices.length === 0 ? 'empty' : scenario} />
+          {(error?.message || result?.message) && <p className="validation-hint" role="status">{error?.message ?? result?.message}</p>}
           <NoticeList notices={notices} selectedId={selectedId} onSelect={setSelectedId} />
           {selected && <NoticeDetail notice={selected} missingReferences={missingReferences} />}
-          {notices.length > 0 && !selected && (
-            <p className="validation-hint">
-              Selecciona un aviso para ver el detalle y localizar sus elementos.
-            </p>
-          )}
-          <footer className="validation-footer">
-            Solo consulta · Las decisiones y el motor real se incorporarán en los siguientes sprints.
-          </footer>
+          {notices.length > 0 && !selected && <p className="validation-hint">Selecciona un aviso para ver el detalle y localizar sus elementos.</p>}
+          <footer className="validation-footer">Solo consulta · Las recomendaciones no modifican el diagrama. No encontrar avisos no garantiza que todo sea correcto.</footer>
         </aside>
       )}
     </>

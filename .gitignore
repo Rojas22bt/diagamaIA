@@ -2,3 +2,5 @@
 .sprint01-postgres.log
 .sprint01-baseline.prisma
 .sprint01-init.sql
+.sprint02-postgres/
+.sprint02-postgres.log

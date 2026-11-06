@@ -29,7 +29,7 @@ export function NoticeDetail({ notice, missingReferences }: NoticeDetailProps) {
       )}
       <p className="validation-meta">
         Captura: {notice.snapshotId} · {notice.ruleVersion}<br />
-        Fecha ficticia: {notice.createdAt}
+        Fecha de revisión: {notice.createdAt}
       </p>
     </section>
   );

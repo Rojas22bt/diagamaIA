@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticateToken } from '../middleware/auth.middleware.js';
+import { getValidation } from '../controllers/validation.controllers.js';
 import {
     createProject,
     getUserProjects,
@@ -23,6 +24,7 @@ router.get('/', getUserProjects);
 
 // Obtener proyecto específico
 router.get('/:id', getProject);
+router.get('/:id/validation', getValidation);
 
 // Actualizar diagrama del proyecto
 router.put('/:id/diagram', updateProjectDiagram);

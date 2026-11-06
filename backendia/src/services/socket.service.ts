@@ -1,8 +1,9 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HTTPServer } from 'http';
-import jwt from 'jsonwebtoken';
 import { verifyToken } from './jwt.service.js';
 import { PrismaClient } from '@prisma/client';
+import { isRecord } from '../validation/diagram.js';
+import { canReadProject, setValidationSocketServer, validation } from '../validation/service.js';
 
 const prisma = new PrismaClient();
 
@@ -24,6 +25,8 @@ export const initializeSocketIO = (httpServer: HTTPServer) => {
         allowEIO3: true
     });
 
+    setValidationSocketServer(io);
+
     // Middleware de autenticación para Socket.IO
     io.use(async (socket: any, next) => {
         try {
@@ -35,6 +38,7 @@ export const initializeSocketIO = (httpServer: HTTPServer) => {
             // Usar el mismo verificador del servicio JWT para mantener el secreto consistente
             const decoded = verifyToken(token) as any;
             socket.userId = decoded.id;
+            socket.data.userId = decoded.id;
             // Cargar datos del usuario para adjuntar email/nombre a los eventos
             try {
                 const usr = await prisma.usuario.findUnique({
@@ -58,22 +62,18 @@ export const initializeSocketIO = (httpServer: HTTPServer) => {
         // Unirse a un proyecto (sala)
         socket.on('join-project', async (projectId: number) => {
             try {
-                // Verificar que el usuario tenga acceso al proyecto (colaborador)
-                const acceso = await prisma.detalle_Proyecto.findFirst({
-                    where: {
-                        id_usuario: socket.userId,
-                        id_proyecto: projectId
-                    }
-                });
-
-                if (!acceso) {
+                if (!Number.isSafeInteger(projectId) || projectId <= 0 || !await canReadProject(projectId, socket.userId)) {
                     socket.emit('error', 'No tienes acceso a este proyecto');
                     return;
                 }
-
+                if (socket.projectId && socket.projectId !== projectId) socket.leave(`project-${socket.projectId}`);
                 socket.projectId = projectId;
+                socket.data.projectId = projectId;
                 socket.join(`project-${projectId}`);
                 socket.emit('joined-project', projectId);
+                void validation.current(projectId, socket.userId).then(async result => {
+                    if (socket.projectId === projectId && await canReadProject(projectId, socket.userId)) socket.emit('validation-result', result);
+                }).catch(() => {});
                 
                 // Notificar a otros usuarios en el proyecto
                 socket.to(`project-${projectId}`).emit('user-joined', {
@@ -94,7 +94,10 @@ export const initializeSocketIO = (httpServer: HTTPServer) => {
         // Abandonar proyecto
         socket.on('leave-project', (projectId: number) => {
             socket.leave(`project-${projectId}`);
-            socket.projectId = undefined;
+            if (socket.projectId === projectId) {
+                socket.projectId = undefined;
+                socket.data.projectId = undefined;
+            }
             
             // Notificar a otros usuarios
             socket.to(`project-${projectId}`).emit('user-left', {
@@ -111,7 +114,9 @@ export const initializeSocketIO = (httpServer: HTTPServer) => {
         // Actualización en tiempo real del diagrama
         socket.on('diagram-update', async (data: any) => {
             try {
+                if (!isRecord(data)) return;
                 const { projectId, diagramData, changeType, elementId } = data;
+                if (typeof projectId !== 'number' || !Number.isSafeInteger(projectId) || projectId <= 0) return;
 
                 // Verificar acceso al proyecto
                 if (!socket.projectId || socket.projectId !== projectId) {
@@ -124,7 +129,8 @@ export const initializeSocketIO = (httpServer: HTTPServer) => {
                     where: {
                         id_usuario: socket.userId,
                         id_proyecto: projectId
-                    }
+                    },
+                    include: { Permisos: true }
                 });
 
                 if (!acceso) {
@@ -132,8 +138,16 @@ export const initializeSocketIO = (httpServer: HTTPServer) => {
                     return;
                 }
 
+                if (!['creador', 'editor'].includes(acceso.Permisos.descripcion)) {
+                    socket.emit('error', 'No tienes permiso para editar este proyecto');
+                    return;
+                }
+
                 // Actualizar diagrama en la base de datos (evitar sobreescribir con deltas de movimiento)
-                if (changeType !== 'move' && changeType !== 'cursor' && diagramData) {
+                const parsedDiagram: unknown = typeof diagramData === 'string' ? JSON.parse(diagramData) : diagramData;
+                const fullDiagram = isRecord(parsedDiagram) &&
+                    ((Array.isArray(parsedDiagram.classes) && Array.isArray(parsedDiagram.relations)) || Array.isArray(parsedDiagram.cells));
+                if (changeType !== 'move' && changeType !== 'cursor' && fullDiagram) {
                     // Asegurar que los datos estén en formato string para la base de datos
                     const dataToSave = typeof diagramData === 'string' ? diagramData : JSON.stringify(diagramData);
                     
@@ -145,6 +159,7 @@ export const initializeSocketIO = (httpServer: HTTPServer) => {
                     });
                     
                     console.log(`Diagrama guardado en BD para proyecto ${projectId}`);
+                    validation.schedule(projectId, socket.userId, parsedDiagram);
                 }
 
                 // Registrar acción para auditoría
